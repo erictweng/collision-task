@@ -333,3 +333,56 @@ def evaluate_dual(ds, cfg: ScreenConfig = ScreenConfig(), err=None,
                 combined=score(rec_all, truth_all, t_a + t_b, n),
                 mids=mids, allow_a=rec_a, allow_b=rec_b,
                 truth_a=truth_a, truth_obj=truth_obj)
+
+
+def evaluate_dual_los(ds, cfg: ScreenConfig = ScreenConfig(), margin_a: float = 0.02,
+                      occluder: str = "other", rng_seed=7):
+    """Regime B under LINE-OF-SIGHT occlusion, with the other arm as the occluder.
+
+    The picture of the table is taken while the station is running, so the arm
+    that is not being screened is in shot. Its mid-trajectory pose is used as the
+    occluder, which is the honest version of "an arm is over the table".
+
+    If `uniform_rate` is given, a matched uniform-dropout condition is scored
+    alongside at the same average dropout rate. Same rate, different identities:
+    that comparison is the point.
+    """
+    import time
+    from .estimate import ErrorModel, observe, visibility
+    from .fast import screen, sample_joint_path
+    from .model import build_dual
+
+    prefixes = [p for p, _ in ARMS]
+    model, _ = build_dual(ds["layouts"][next(iter(ds["layouts"]))])
+    proxies = [ArmProxy(model, prefix=p) for p in prefixes]
+    by = {}
+    for s, dm in ds["motions"]:
+        by.setdefault(s, []).append(dm)
+
+    rows = []
+    n_missing = []
+    for s, dms in by.items():
+        lay = ds["layouts"][s]
+        for dm in dms:
+            allow, missing_all = True, set()
+            for k in range(len(prefixes)):
+                # "other": a fresh picture, taken while the OTHER arm is working.
+                # "self": a STALE picture, taken while this arm was last over its
+                # own work area -- the case in which occlusion and collision
+                # share a cause.
+                occ = (1 - k) if occluder == "other" else k
+                mid = sample_joint_path(dm.per_arm[occ], cfg.n_poses)[cfg.n_poses // 2]
+                C = proxies[occ].fk_spheres(mid[None, :])[0]
+                err = ErrorModel(line_of_sight=True, arm_centers=C,
+                                 arm_radii=proxies[occ].radii, name="los")
+                est = observe(lay, err)
+                seen = {o.oid for o in est.objects}
+                missing_all |= {o.oid for o in lay.objects} - seen
+                allow &= screen([dm.per_arm[k]], est, proxies[k], cfg)[0].allow
+            n_missing.append(len(missing_all))
+            o = ds["outcomes"][dm.mid]
+            rows.append(dict(mid=dm.mid, allow=bool(allow), unsafe=o.unsafe,
+                             arm=is_arm_collision(o), culprit=o.culprit,
+                             missing=missing_all,
+                             culprit_hidden=o.culprit in missing_all))
+    return rows, float(np.mean(n_missing))

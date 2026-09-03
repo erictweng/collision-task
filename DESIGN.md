@@ -199,12 +199,40 @@ Each error mode is derived from that camera arrangement rather than invented:
   ≤ m" is exactly "safe against every box inflated by m". No sampling required —
   which is the reduction that keeps the hypothesis count small.
 - **Missing objects.** With a single exo viewpoint, occlusion is *structural and
-  pose-dependent*, not a uniform dropout rate. The occluder is usually an arm.
-  **So the object most likely to be absent from the estimate is the one the arm
-  is currently reaching over — which is the one it is most likely to hit.** This
-  is the only error mode that produces false *accepts*, therefore the only one
-  that can damage hardware, therefore the one worth spending on. `[B3]` replaces
-  the current uniform `p_missing` with line-of-sight occlusion.
+  pose-dependent*, not a uniform dropout rate — so it is modelled by ray-casting
+  from the camera against the other objects and against the arms.
+
+  The camera mount was chosen by measurement rather than taste. From a shallow
+  front view (1.35, 0, 0.85) **nothing is ever occluded** — rays pass beneath the
+  arms — so the error mode the design cares about would never have fired. From
+  above (0.75, 0, 1.25) an arm over the table hides 22–33% of objects and the
+  furniture alone hides none. Occlusion at this station is caused by arms.
+
+  **The hypothesis, and its refutation.** The expectation was sharp: the object
+  most likely to be missing is the one an arm is reaching over, which is the one
+  most likely to be hit — making occlusion the dominant source of false accepts.
+  Measured over 384 station-steps at an 18.6% effective dropout rate:
+
+  | | culprit was hidden from the camera |
+  |---|---|
+  | among false accepts (fresh estimate, other arm occluding) | 1 of 12 — **8%** |
+  | among false accepts (stale estimate, same arm occluding) | 2 of 13 — 15% |
+  | baseline, among *all* object collisions | 8 of 84 — 10% |
+
+  **No correlation.** And the mechanism explains why: an arm occludes the objects
+  it is *already working over*, and those are exactly the objects the other arm
+  is least likely to reach. At this geometry occlusion is mildly **anti**-
+  correlated with risk rather than correlated with it.
+
+  What occlusion actually costs is **yield**: keep rate falls from 0.343 to 0.172
+  when line-of-sight dropout is applied. Like phantoms, it is a productivity tax
+  rather than a safety hazard — which was not the prediction.
+
+  This does not mean the mechanism is unreal; it means it is not dominant *here*,
+  at this object scale and this arm separation. A station where one arm reaches
+  across the other's work area would likely show it. That is a testable
+  difference, and it is stated so someone can go and test it rather than inherit
+  the assumption.
 - **Phantoms.** A specular detection, a shadow, a stale track. The interesting
   question is whether a phantom costs keep rate (it should) or safety (it must
   not). Measured: keep rate only.
@@ -410,6 +438,31 @@ perturbs a good reference so every candidate sits near the decision boundary,
 while B's arcs and drags are mostly obviously fine or obviously terrible. B
 failed to be adversarial. The correct response is to rewrite B against motion
 families A never produced — not to re-tune the screener against it.
+
+---
+
+## 9b. Three predictions, three refutations
+
+Recorded because it is the most useful thing this build produced, and because
+the pattern is the argument for measuring rather than reasoning:
+
+| predicted to matter | measured |
+|---|---|
+| **Tunnelling** between sampled poses is the blind spot | 16× the sampling density removes 2 of 15 false accepts and costs 16× throughput. Not the blind spot. |
+| **The cost ratio is a cliff**, so the operating point is bimodal | At 4× the data it is a steep but continuous decline. The cliff was a small-sample artefact resting on about a dozen motions. |
+| **Occlusion hides the object you are about to hit** | 8% of false-accept culprits were hidden against a 10% baseline. Mildly anti-correlated, not correlated. |
+
+Meanwhile, the two things that did matter were not predicted at all:
+
+- a **saturating distance function** that made bin deliveries and bin crushes
+  numerically identical (§8b), and
+- **six of thirty-two arrangements being unserveable**, holding 34% of all unsafe
+  candidates, removable by one simulation each (§7b).
+
+Every one of the three refuted hypotheses is individually plausible, and two of
+them came from careful reasoning about the physics. They were wrong anyway. The
+cheap measurement that disconfirmed each took under twenty minutes; carrying any
+of them into the design would have cost a great deal more.
 
 ---
 
