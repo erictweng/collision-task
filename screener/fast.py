@@ -126,11 +126,12 @@ def _fit_spheres(pts, max_k=8):
 class ArmProxy:
     """Batched FK plus a sphere approximation of the arm, both built once."""
 
-    def __init__(self, model, max_k=10):
+    def __init__(self, model, max_k=10, prefix: str = ""):
         import mujoco
+        self.prefix = prefix
         self.links = []
         for name in CHAIN:
-            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, prefix + name)
             jadr, jnum = model.body_jntadr[bid], model.body_jntnum[bid]
             joint = None
             if jnum > 0:

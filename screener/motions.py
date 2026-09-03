@@ -45,22 +45,52 @@ class Motion:
 # kinematics
 # --------------------------------------------------------------------------
 
-def _arm_qpos_adr(model):
+def _arm_qpos_adr(model, prefix: str = ""):
+    """Joint addresses BY NAME.
+
+    On the two-arm model the object free-joints are declared before the arms, so
+    the arm's joints are no longer at qpos[0:7]. Every positional assumption of
+    that kind is a silent wrong-body bug, so addressing is name-based throughout.
+    """
     return np.array([model.jnt_qposadr[mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_JOINT, j)] for j in ARM_JOINTS])
+        model, mujoco.mjtObj.mjOBJ_JOINT, prefix + j)] for j in ARM_JOINTS])
+
+
+def arm_ctrl_ids(model, prefix: str = ""):
+    """Actuator ids for one arm: seven joints then the gripper."""
+    ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{prefix}actuator{i}")
+           for i in range(1, 9)]
+    return np.array(ids)
+
+
+def adr_to_jnt(model, prefix: str = ""):
+    return np.array([mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, prefix + j)
+                     for j in ARM_JOINTS])
+
+
+def arm_dofs(model, prefix: str = ""):
+    """Velocity-space indices of one arm's seven joints.
+
+    mj_jac returns a column per DOF of the whole model. On the two-arm scene the
+    object free joints occupy the first 36 of them, so slicing `[:, :7]` selects
+    the bin's translation and rotation instead of the arm's joints -- the IK then
+    reports a jacobian for the furniture and never moves. Same failure as
+    assuming qpos[0:7]: index by name, never by position."""
+    return model.jnt_dofadr[adr_to_jnt(model, prefix)]
 
 
 TCP_OFFSET = 0.1034      # hand body origin -> between the fingertips, +z of hand
 
 
-def tcp_of(model, data):
+def tcp_of(model, data, prefix: str = ""):
     """World position of the tool centre point."""
-    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, EE_BODY)
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, prefix + EE_BODY)
     R = data.xmat[bid].reshape(3, 3)
     return data.xpos[bid] + R @ np.array([0.0, 0.0, TCP_OFFSET]), R, bid
 
 
-def ik_pose(model, data, target_xyz, q0, iters=200, tol=2e-3, w_rot=0.35):
+def ik_pose(model, data, target_xyz, q0, iters=200, tol=2e-3, w_rot=0.35,
+            prefix: str = ""):
     """Damped least-squares IK solving for the TCP position with the gripper
     pointing down.
 
@@ -74,25 +104,27 @@ def ik_pose(model, data, target_xyz, q0, iters=200, tol=2e-3, w_rot=0.35):
     that axis is left free, because pinning it costs reachability and buys
     nothing here.
     """
-    adr = _arm_qpos_adr(model)
+    adr = _arm_qpos_adr(model, prefix)
     q = np.array(q0, dtype=float)
     jacp = np.zeros((3, model.nv))
     jacr = np.zeros((3, model.nv))
-    lo, hi = model.jnt_range[:N_ARM, 0], model.jnt_range[:N_ARM, 1]
+    dofs = arm_dofs(model, prefix)
+    jr = model.jnt_range[adr_to_jnt(model, prefix)]
+    lo, hi = jr[:, 0], jr[:, 1]
     desired_z = np.array([0.0, 0.0, -1.0])
     err_norm = 1e9
     for _ in range(iters):
         data.qpos[adr] = q
         mujoco.mj_kinematics(model, data)
         mujoco.mj_comPos(model, data)
-        tcp, R, bid = tcp_of(model, data)
+        tcp, R, bid = tcp_of(model, data, prefix)
         e_pos = np.asarray(target_xyz) - tcp
         e_rot = np.cross(R[:, 2], desired_z)          # 0 when z-axis points down
         err_norm = float(np.linalg.norm(e_pos))
         if err_norm < tol and np.linalg.norm(e_rot) < 0.05:
             break
         mujoco.mj_jac(model, data, jacp, jacr, tcp, bid)   # jacobian AT the TCP
-        J = np.vstack([jacp[:, :N_ARM], w_rot * jacr[:, :N_ARM]])
+        J = np.vstack([jacp[:, dofs], w_rot * jacr[:, dofs]])
         e = np.concatenate([e_pos, w_rot * e_rot])
         dq = J.T @ np.linalg.solve(J @ J.T + 1e-4 * np.eye(6), e)
         q = np.clip(q + 0.5 * dq, lo, hi)
@@ -114,7 +146,8 @@ def _cube_center(o: Obj) -> np.ndarray:
 
 
 def reference_waypoints(model, data, layout: Layout, cube: Obj, bin_: Obj,
-                        transit_h: float = 0.22, approach=(0.0, 0.0)):
+                        transit_h: float = 0.22, approach=(0.0, 0.0),
+                        prefix: str = ""):
     """The scripted reference: approach above the cube, descend, lift, transit,
     descend into the bin, retreat. Six task-space points -> six joint waypoints."""
     drop = np.array(bin_.drop_point)
@@ -130,7 +163,7 @@ def reference_waypoints(model, data, layout: Layout, cube: Obj, bin_: Obj,
     q = HOME_QPOS.copy()
     ws, errs = [], []
     for p in pts:
-        q, e = ik_pose(model, data, p, q)
+        q, e = ik_pose(model, data, p, q, prefix=prefix)
         ws.append(q.copy())
         errs.append(e)
     return np.array(ws), grip, float(max(errs))

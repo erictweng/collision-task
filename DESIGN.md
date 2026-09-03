@@ -107,11 +107,51 @@ This is the direct answer to *accuracy vs cost of prevention*: the two halves
 sit at different points on that tradeoff **because they are supplied by
 different information**, and charging them the same margin is the mistake.
 
-> **Prediction, recorded before block 2 runs:** splitting the regimes improves
-> the combined system but will **not** by itself lift Regime B's keep rate,
-> because the 12% figure comes entirely from proxy conservatism against posts in
-> Regime B. Regime A should come in at a keep rate above 0.9 at a margin of a
-> few millimetres. `[B2]` will report whether that held.
+> **Predictions recorded before block 2 ran**, and what happened:
+> 1. *"Splitting the regimes will not by itself lift Regime B's keep rate."*
+>    **Held.** Regime B sits at 0.343 with the same conservatism as before.
+> 2. *"Regime A should come in above 0.9 keep at a margin of a few millimetres."*
+>    **Wrong.** It comes in at 0.607 at 0 mm and 0.494 at 20 mm. Two arms means
+>    two sphere proxies, so the conservatism stacks: the gap being tested is
+>    real distance minus *both* arms' proxy error. I under-estimated that, and
+>    the fix is a tighter proxy, not a smaller margin.
+
+### Measured, n = 384 station-steps (58% unsafe: 36% arm-arm, 22% object-only)
+
+| | keep rate | false accepts | throughput |
+|---|---:|---:|---:|
+| **Regime A** (arm vs arm) | 0.494 | **0 (0.0%)** | 724/s |
+| **Regime B** (arm vs objects) | 0.343 | 12 (14.3%) | 686/s |
+| Combined station verdict | 0.104 | 2 (0.9%) | 233/s |
+
+**Regime A catches every arm-arm collision at every margin tested**, from 0 to
+50 mm. Not "few" — zero false accepts, because the quantity it screens is known
+exactly rather than estimated. It buys that with false rejects, which is the
+right direction to be wrong in.
+
+### The immunity claim, measured rather than argued
+
+Identical screener, four scene conditions:
+
+| condition | Regime A keep / FA | Regime B keep / FA |
+|---|---|---|
+| perfect | 0.494 / **0** | 0.343 / 12 |
+| systematic 8 mm offset | 0.494 / **0** | 0.383 / 11 |
+| 15% occluded away | 0.494 / **0** | 0.427 / 13 |
+| 2 phantom objects | 0.494 / **0** | 0.120 / 1 |
+
+Regime A does not move at all — not approximately, exactly — because
+`screen_regime_a` takes no `SceneEstimate` argument. The immunity is enforced by
+the function signature, not by discipline.
+
+### The uncomfortable part
+
+The **combined** station keeps only 10.4% of good station-steps. The two regimes
+reject independently, so their false rejects compound: a step survives only if
+both arms clear the objects *and* clear each other. Adding a second arm roughly
+halves yield before it adds any capacity. That is a real cost of bimanual
+operation that the single-arm analysis could not have surfaced, and it belongs
+in the deployment argument rather than being smoothed over.
 
 ---
 

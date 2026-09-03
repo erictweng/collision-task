@@ -58,10 +58,15 @@ def _body_xml(o: Obj) -> str:
     )
 
 
-def scene_xml(layout: Layout) -> str:
+ARMS = (("a_", (0.0, -0.40, 0.0)), ("b_", (0.0, 0.40, 0.0)))
+
+
+def scene_xml(layout: Layout, include_arm: bool = True) -> str:
     bodies = "\n".join(_body_xml(o) for o in layout.objects)
+    arm = '<include file="panda.xml"/>' if include_arm else ""
     return f"""<mujoco model="screening_scene_{layout.layout_id}">
-  <include file="panda.xml"/>
+  {arm}
+  <option integrator="implicitfast"/>
   <statistic center="0.4 0 0.2" extent="1.2"/>
   <visual><global azimuth="140" elevation="-25"/></visual>
   <asset>
@@ -81,13 +86,34 @@ def scene_xml(layout: Layout) -> str:
 
 
 def build(layout: Layout):
-    """Write the scene beside panda.xml (so meshdir resolves) and load it."""
+    """Single-arm scene. Written beside panda.xml so its relative meshdir resolves."""
     d = panda_dir()
     path = d / f"_gen_{layout.layout_id}.xml"
     path.write_text(scene_xml(layout))
     model = mujoco.MjModel.from_xml_path(str(path))
-    data = mujoco.MjData(model)
-    return model, data
+    return model, mujoco.MjData(model)
+
+
+def build_dual(layout: Layout):
+    """Two-arm station.
+
+    panda.xml names its bodies `link0`..`hand` with no namespace, so including it
+    twice collides. MuJoCo's spec API attaches a compiled child under a prefix,
+    which is cleaner than textually rewriting the model and keeps us on the
+    upstream file. Arms are mounted either side of the shared work area so their
+    envelopes genuinely overlap -- two arms that cannot reach each other would
+    make Regime A vacuous.
+    """
+    d = panda_dir()
+    path = d / f"_gendual_{layout.layout_id}.xml"
+    path.write_text(scene_xml(layout, include_arm=False))
+    world = mujoco.MjSpec.from_file(str(path))
+    for prefix, pos in ARMS:
+        child = mujoco.MjSpec.from_file(str(d / "panda.xml"))
+        frame = world.worldbody.add_frame(pos=list(pos))
+        world.attach(child, prefix=prefix, frame=frame)
+    model = world.compile()
+    return model, mujoco.MjData(model)
 
 
 # The Panda is mounted at the world origin by panda.xml; we sit the table under

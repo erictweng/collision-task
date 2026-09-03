@@ -180,3 +180,47 @@ def random_layout(seed: int, n_cubes: int = 4, n_posts: int = 2,
         placed.append((x, y))
 
     return Layout(f"L{seed:03d}", tuple(objs))
+
+
+# --------------------------------------------------------------------------
+# two-arm station
+# --------------------------------------------------------------------------
+
+DUAL_BIN_Y = 0.30
+DUAL_PICK_Y = 0.20
+
+
+def dual_layout(seed: int, n_cubes: int = 6, n_posts: int = 1) -> Layout:
+    """A two-arm station: one bin per arm, a shared pick area between them.
+
+    The first version gave both arms the same bin. Every motion then collided --
+    100% unsafe, which measures nothing, and is the same failure as evaluating on
+    demo data. Collisions have to be *possible but not certain* or the screener
+    has nothing to separate. Here each arm delivers to its own side and the two
+    only interfere over the shared cubes in the middle.
+    """
+    rng = np.random.default_rng(1000 + seed)
+    objs = [make_bin("bin0", float(rng.uniform(0.33, 0.42)), -DUAL_BIN_Y),
+            make_bin("bin1", float(rng.uniform(0.33, 0.42)), DUAL_BIN_Y)]
+    placed = [(o.center[0], o.center[1]) for o in objs]
+
+    pts = []
+    for _ in range(n_cubes):
+        for _try in range(400):
+            x = rng.uniform(0.34, 0.60)
+            y = rng.uniform(-DUAL_PICK_Y, DUAL_PICK_Y)
+            if all(math.hypot(x - px, y - py) >= 0.10 for px, py in placed):
+                placed.append((x, y)); pts.append((x, y)); break
+        else:
+            raise RuntimeError("could not place cube")
+    objs += [make_cube(f"cube{i}", x, y) for i, (x, y) in enumerate(pts)]
+
+    for i in range(n_posts):
+        for _try in range(400):
+            x = rng.uniform(0.36, 0.56)
+            y = rng.uniform(-0.22, 0.22)
+            if all(math.hypot(x - px, y - py) >= 0.10 for px, py in placed):
+                placed.append((x, y))
+                objs.append(make_post(f"post{i}", x, y, h=float(rng.uniform(0.09, 0.15))))
+                break
+    return Layout(f"D{seed:03d}", tuple(objs))
