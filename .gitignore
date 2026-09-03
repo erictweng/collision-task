@@ -3,3 +3,5 @@ __pycache__/
 out/*.json
 out/*.npz
 .venv/
+MUJOCO_LOG.TXT
+out/p[ABD]*.pkl
