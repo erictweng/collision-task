@@ -26,14 +26,20 @@ clearance margin makes it simultaneously safe and productive: measured, any
 false-accept:false-reject ratio above about 10:1 pins the screener at a **12%
 keep rate** `[provisional]`, which starves the pipeline it exists to feed.
 
-The way out is not a better screener. It is a cheaper failure. **A runtime
-force trip changes what a false accept costs** — a permitted motion caught
-milliseconds after first contact is an aborted rollout and a log line, not a
-knocked-over bin and a callout. That buys the ratio down to roughly 6-8:1, and
-8:1 is exactly where the operating point stops being pinned and yield jumps to
-**57%** `[provisional]`. So the trip is not a backstop bolted on afterwards; it
-is the premise that licenses the screener's operating point. Remove it and the
-defensible configuration is +25 mm and 12% yield.
+The way out is not a better screener. It is three cheap controls instead of one
+expensive one, and **the cheapest of them is not the screener**: simulating the
+reference delivery once per arrangement removes 34% of all unsafe candidates
+before any are generated, and it is the only intervention in the design that
+improves safety and yield at the same time. A runtime force trip then converts
+what the screener still misses from a callout into an aborted rollout. Measured
+end to end, the three together give **35× fewer human interventions for 8% less
+yield** than the screener alone.
+
+The trip does not buy the cost ratio down as far as first assumed — it lands
+around 16–138:1 rather than 8:1 — but it does something better: it decouples the
+operating point from the ratio, by making the residual false accepts cheap in
+the unit that actually matters, which is human interventions per thousand
+candidates.
 
 Mo's correction — preempt rather than detect mid-rollout — is accepted, and is
 why the screener runs before execution. The trip bounds the cost of the screener
@@ -291,15 +297,83 @@ motions. The conclusion survives in weaker form — yield falls off hard above
 and reporting it would have been reporting noise.
 
 A raw crash on unattended hardware is not an 8:1 event; it is closer to 1000:1.
-So the ratio must be *bought down*, and the force trip is the mechanism. §0 has
-the argument. What this document owes in return is the honest statement of what
-the trip must achieve for the claim to hold — a threshold low enough and a
-reaction fast enough that first contact does not become displacement — and what
-happens to the design if it does not: back to +25 mm and 12%.
+So the ratio has to be bought down. The force trip was the proposed mechanism,
+and it was an assertion until measured. It is measured now, and the answer is
+more interesting than the assertion.
+
+### The trip has its own intended-contact problem
+
+A wrist sensor cannot tell which object it touched. Grasping the target and
+entering the bin both register, so the threshold floor is set by what *correct*
+motions already generate — measured, not assumed:
+
+| threshold | fires on SAFE motions | catches UNSAFE motions |
+|---:|---:|---:|
+| 10 N | 17.4% | **100%** |
+| 20 N | 9.1% | 82% |
+| 30 N | 3.0% | 74% |
+| 80 N | 0.0% | 51% |
+
+The trip has its own ROC curve, and the asymmetry is favourable in a way the
+screener's is not: **a false trip is an aborted rollout, not a crash.** It costs
+a candidate, exactly like a false reject. So the trip can be run aggressively —
+10 N catches everything, and the 17% it wrongly aborts is a yield tax, not a
+safety event.
+
+### What it prevents
+
+111 unsafe motions, re-executed with the trip armed:
+
+| reaction | peak force median / p90 | scene resets needed |
+|---|---|---|
+| none | 85 N / 183 N | 8 / 111 |
+| freeze position targets | **24 N / 74 N** | 5 / 111 |
+| active retract 120 ms | 24 N / 74 N | 4 / 111 |
+
+Peak force falls 3.5×. The reaction *policy* barely matters — freezing and
+retracting are within one event of each other — so the engineering requirement is
+on the **threshold and the sensing latency**, not on a clever recovery behaviour.
+That is a cheaper requirement to meet, and worth knowing before anyone builds a
+retract reflex.
+
+### The honest correction to the premise
+
+The trip does **not** buy the ratio down to 8:1. Measured, a false accept under
+the trip costs `0.955 × (an aborted rollout) + 0.045 × (a reset and a callout)`,
+which lands at **16:1 to 138:1** depending on what a callout is worth. Still
+above the band where the operating point stops being pinned.
+
+It does not need to. What the trip actually does is **decouple the operating
+point from the ratio**, by making the residual false accepts cheap in the units
+that matter — human interventions:
+
+### The three controls together, per 1000 candidates screened
+
+| configuration | executed | collided | **human resets** | usable episodes |
+|---|---:|---:|---:|---:|
+| screener only | 333 | 32.0 | **32.0** | 301 |
+| + feasibility gate | 357 | 20.2 | **20.2** | 337 |
+| + force trip @ 10 N | 357 | 20.2 | **0.9** | 278 |
+| screener + trip, no gate | 333 | 32.0 | 1.4 | 248 |
+
+**35× fewer human interventions for 8% less yield.** And the ordering matters:
+
+- The **feasibility gate is strictly dominant** — it improves safety *and* yield
+  simultaneously, because it removes candidates that were never achievable. It is
+  the only control here with no downside, and it is the cheapest.
+- The **trip** is what collapses interventions, at a yield cost paid in false
+  trips.
+- The **screener** is what makes the trip's job small enough to be survivable —
+  without it every candidate would be a physical experiment.
+
+None of the three is sufficient. The screener alone leaves 32 callouts per
+thousand; the trip alone leaves the pipeline running blind into 32 collisions and
+recovers less yield; the gate alone does not address motion-level errors at all.
+**The design is the combination, and the argument for it is this table.**
 
 Secondary and nearly free, from the same notes: **flag rollouts running
-abnormally long for their task.** Not a collision detector, but an anomaly
-signal on a channel that already exists.
+abnormally long for their task.** Not a collision detector, but an anomaly signal
+on a channel that already exists.
 
 ---
 
