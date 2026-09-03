@@ -301,9 +301,48 @@ So the ratio has to be bought down. The force trip was the proposed mechanism,
 and it was an assertion until measured. It is measured now, and the answer is
 more interesting than the assertion.
 
+### First: which sensor, and what that actually requires
+
+The trip is **not part of the screener**. The screener is kinematic, runs before
+anything moves, and never computes a force; the trip runs on the robot during
+execution and reads its own sensors. They live in separate packages for that
+reason (`screener/` and `station/`).
+
+An earlier draft said "a wrist sensor" without checking whether a wrist sensor
+could see the collisions in question. It can, for one workload and not the other,
+and the split is sharp enough to be a design requirement rather than a footnote.
+A wrist force/torque sensor senses only what is transmitted *through the wrist*;
+joint torque sensing on all seven axes (which the Panda has) sees the whole arm.
+
+| | harmful contacts made by | a wrist F/T sensor sees |
+|---|---|---|
+| arm vs objects (n=116) | 99% hand or fingers | **100%** |
+| arm vs arm (n=59) | 83% link5/link6 — elbow and forearm | **5%** |
+
+**A wrist sensor is sufficient for the single-arm tabletop task and close to
+useless for the bimanual one.** Anyone specifying hardware from the single-arm
+result would under-buy for a two-arm station.
+
+That is fortunate rather than alarming, and it is the strongest argument for the
+layering in §7b:
+
+| | pre-execution screener | wrist force sensor |
+|---|---|---|
+| arm vs objects | ~90% of unsafe caught | 100% |
+| arm vs arm | **100% — zero false accepts** | 5% |
+
+**Each control catches precisely what the other structurally cannot.** The
+screener is blind to force and therefore to the delivering-vs-crushing
+distinction; a wrist sensor is blind to the elbow. They are not redundancy, they
+are complementary coverage, and the numbers say so rather than the prose.
+
+Everything below is measured with contact force scored anywhere on the arm —
+i.e. assuming joint torque sensing. On a station with wrist-only sensing, the
+arm-vs-arm row does not hold and the screener carries that class alone.
+
 ### The trip has its own intended-contact problem
 
-A wrist sensor cannot tell which object it touched. Grasping the target and
+A force sensor cannot tell which object it touched. Grasping the target and
 entering the bin both register, so the threshold floor is set by what *correct*
 motions already generate — measured, not assumed:
 

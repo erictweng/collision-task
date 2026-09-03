@@ -1,5 +1,10 @@
 """The runtime force trip: what it can catch, how fast, and what it costs.
 
+NOT PART OF THE SCREENER. The screener is kinematic and runs before anything
+moves; this runs on the robot during execution and reads a sensor. They are
+different controls at different times, and having this file inside `screener/`
+implied otherwise.
+
 This is the premise the operating point rests on. Section 7 of DESIGN.md argues
 that a permitted motion which collides is an aborted rollout rather than a
 callout, and that this is what buys the false-accept:false-reject ratio down far
@@ -8,11 +13,29 @@ worth nothing unmeasured, so this module measures it.
 
 Two things have to be true for the trip to work, and they pull against each other:
 
-  1. The threshold must sit ABOVE what a correct motion generates. A wrist sensor
+  1. The threshold must sit ABOVE what a correct motion generates. A force sensor
      cannot tell which object it touched, so grasping the target and entering the
      bin both register. This is the same intended-vs-unintended problem the
      screener has, in a different sensor -- and it is why the floor is measured
      from safe motions rather than assumed.
+
+WHAT SENSOR THIS ASSUMES, measured rather than asserted. `run_with_trip` scores
+contact force anywhere on the arm, which is what JOINT TORQUE sensing on all
+seven axes provides (the Panda has it). A cheaper wrist force/torque sensor sees
+only what is transmitted through the wrist, and the difference is entirely
+workload-dependent:
+
+    arm vs objects   99% of harmful contacts are hand or fingers -> a wrist
+                     sensor sees 100% of them. Measured over 116 unsafe motions.
+    arm vs arm       83% are link5/link6 only -- the elbow and forearm -> a wrist
+                     sensor sees 5%. Measured over 59 arm-arm collisions.
+
+So a wrist sensor is sufficient for the single-arm tabletop task and close to
+useless for the bimanual one. That is fortunate rather than alarming: arm-vs-arm
+is exactly the class the pre-execution screener catches perfectly (zero false
+accepts, and no camera in the path). The two controls cover complementary
+failure modes, and this is the measurement that shows it rather than assuming
+it.
   2. It must fire early enough that little has moved. A trip that fires after the
      bin is on the floor has converted nothing.
 """
@@ -23,10 +46,10 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from .model import HOME_QPOS
-from .motions import Motion, N_ARM
-from .scene import Layout
-from .truth import DISP_M, _ctrl_at, _owner_map
+from screener.model import HOME_QPOS
+from screener.motions import Motion, N_ARM
+from screener.scene import Layout
+from screener.truth import DISP_M, _ctrl_at, _owner_map
 
 
 @dataclass

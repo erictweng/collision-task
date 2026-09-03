@@ -22,6 +22,9 @@ and how to run it.
   exactly invariant under all three scene errors — it reads no camera estimate.
 - Three controls, none sufficient alone. Per 1000 candidates: **32 human
   interventions → 0.9**, for 8% less yield.
+- They are complementary, not redundant: the screener catches **100%** of
+  arm-vs-arm collisions and a wrist force sensor catches **5%** of them (they
+  happen at the elbow); for arm-vs-object collisions it is the other way round.
 
 ## Running it
 
@@ -56,8 +59,9 @@ at a local checkout; otherwise `robot_descriptions` downloads one on first use.
 | `screener/geom.py` | vectorised sphere/box distance — imports no mujoco, by design |
 | `screener/fast.py` | batched FK, the sphere proxy, the screener, self-collision |
 | `screener/dual.py` | Regime A: arm vs arm |
-| `screener/trip.py` | the runtime force trip, measured |
+
 | `screener/evalrun.py` | evaluation — **the only file where truth and estimate are both in scope** |
+| `station/trip.py` | the runtime force trip. **Not part of the screener** — it runs on the robot during execution and reads a sensor; the screener is kinematic and runs before anything moves |
 
 If you are auditing for leakage, `evalrun.py` is the place. `screen()` takes a
 `SceneEstimate`; there is no argument through which an `Outcome` could arrive.
