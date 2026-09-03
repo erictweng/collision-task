@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+from dataclasses import replace
 import numpy as np
 
 from screener.estimate import ErrorModel
@@ -28,7 +29,7 @@ STATIONS = 10
 SECONDS_PER_EXECUTION = 8.0
 CANDIDATES_PER_EXECUTION = 100
 LATENCY_BUDGET_S = 0.100
-CHOSEN = ScreenConfig(margin=0.015)
+CHOSEN = ScreenConfig(margin=0.000)   # see DESIGN.md sec.7: the trip licenses a low margin
 N_HYP = 4
 
 
@@ -55,7 +56,7 @@ def main():
     rebuild = "--rebuild" in sys.argv
     dsA_p, dsB_p = OUT / "ds_A.pkl", OUT / "ds_B.pkl"
     if rebuild or not dsA_p.exists():
-        dsA = build_dataset(n_layouts=8, per_layout=40, gen="A")
+        dsA = build_dataset(n_layouts=32, per_layout=40, gen="A")
         pickle.dump(dsA, open(dsA_p, "wb"))
     else:
         dsA = pickle.load(open(dsA_p, "rb"))
@@ -88,20 +89,17 @@ def main():
         print(f"  {k:<32} {v:,.4g}")
 
     print("\n=== degradation under each scene error (chosen operating point) ===")
+    inflate = replace(CHOSEN, offset_inflation=0.010)
     modes = {
         "perfect": (ErrorModel(name="perfect"), CHOSEN, 1),
         "offset_8mm": (ErrorModel(offset=(0.008, 0.004, 0.0), name="offset"), CHOSEN, 1),
         "offset_8mm_+inflation": (ErrorModel(offset=(0.008, 0.004, 0.0), name="offset"),
-                                  ScreenConfig(margin=CHOSEN.margin, offset_inflation=0.010), 1),
+                                  inflate, 1),
         "missing_15pct": (ErrorModel(p_missing=0.15, name="missing"), CHOSEN, 1),
         "missing_15pct_+4hyp": (ErrorModel(p_missing=0.15, name="missing"), CHOSEN, 4),
-        "missing_15pct_+unknown": (ErrorModel(p_missing=0.15, shadows=True, name="missing"),
-                                   ScreenConfig(margin=CHOSEN.margin, unknown_margin=0.004), 1),
         "phantom_2": (ErrorModel(n_phantom=2, name="phantom"), CHOSEN, 1),
-        "all_three": (ErrorModel(offset=(0.008, 0.004, 0.0), p_missing=0.15, n_phantom=2,
-                                 shadows=True, name="all"),
-                      ScreenConfig(margin=CHOSEN.margin, offset_inflation=0.010,
-                                   unknown_margin=0.004), 4),
+        "all_three": (ErrorModel(offset=(0.008, 0.004, 0.0), p_missing=0.15,
+                                 n_phantom=2, name="all"), inflate, 4),
     }
     deg = {}
     for name, (err, cfg, nh) in modes.items():

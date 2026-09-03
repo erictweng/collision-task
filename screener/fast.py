@@ -170,6 +170,9 @@ class ArmProxy:
             keep = ~contained.any(axis=1)
             l["sc"], l["sr"] = c[keep], r[keep]
         self.radii = np.concatenate([l["sr"] for l in self.links])
+        # which link each sphere belongs to, for the self-collision test
+        self.link_idx = np.concatenate([
+            np.full(len(l["sr"]), i) for i, l in enumerate(self.links)]).astype(int)
         # Intended contact is localised to the TOOL. The gripper has to reach the
         # table surface to pick anything up; the elbow does not, and letting the
         # whole arm share the gripper's licence to approach surfaces is what made
@@ -334,3 +337,62 @@ def screen(motions, est: SceneEstimate, proxy: ArmProxy,
     return [Verdict(mo.mid, bool(allow[b]), float(worst_per_part[b, worst_idx[b]]),
                     None if allow[b] else str(owner[worst_idx[b]]))
             for b, mo in enumerate(motions)]
+
+
+def self_collision_pairs(proxy: ArmProxy, min_link_gap: int = 2):
+    """Sphere pairs on the same arm that are far enough apart in the kinematic
+    chain to be a genuine self-collision rather than adjacent links touching."""
+    li = proxy.link_idx
+    i, j = np.triu_indices(len(li), k=1)
+    keep = np.abs(li[i] - li[j]) >= min_link_gap
+    return i[keep], j[keep]
+
+
+def calibrate_self_pairs(proxy: ArmProxy, motions, cfg: ScreenConfig = ScreenConfig(),
+                         slack: float = 0.004):
+    """Learn a per-pair floor from motions known NOT to self-collide.
+
+    A sphere proxy that strictly contains the arm necessarily has non-adjacent
+    link spheres overlapping in ordinary poses -- the covering is generous, and
+    the shoulder's spheres reach into the elbow's. Testing raw overlap therefore
+    rejects every motion, which is what the first version did.
+
+    MuJoCo solves the same problem for the real model with an explicit
+    <contact><exclude> list. This is the empirical equivalent: run configurations
+    that are known self-collision-free, record how close each pair legitimately
+    gets, and require a genuine self-collision to go closer than that by `slack`.
+    Calibrating on the truth label rather than on intuition is the point --
+    guessing which link pairs "should" be excluded is how the arbitrary bits of a
+    screener get in.
+    """
+    i, j = self_collision_pairs(proxy, min_link_gap=1)
+    floor = np.full(len(i), np.inf)
+    for k in range(0, len(motions), 64):
+        chunk = motions[k:k + 64]
+        Q = np.stack([sample_joint_path(m, cfg.n_poses) for m in chunk])
+        C = proxy.fk_spheres(Q.reshape(-1, 7)).reshape(len(chunk), cfg.n_poses,
+                                                       proxy.n_spheres, 3)
+        d = np.linalg.norm(C[:, :, i, :] - C[:, :, j, :], axis=-1)
+        gap = d - proxy.radii[i][None, None, :] - proxy.radii[j][None, None, :]
+        floor = np.minimum(floor, gap.min(axis=(0, 1)))
+    return i, j, floor - slack
+
+
+def screen_self(motions, proxy: ArmProxy, calib, cfg: ScreenConfig = ScreenConfig()):
+    """Arm against itself.
+
+    This belongs to Regime A: the arm's own geometry is known exactly and the
+    trajectory is one we commanded, so there is no perception in the path and no
+    SceneEstimate argument. It was missing, and the held-out generator is what
+    found that -- 62% of generator B's false accepts were self-collisions, while
+    generator A produced configurations contorted enough to self-collide only
+    rarely enough that tuning on it could never have surfaced the gap.
+    """
+    B, N = len(motions), cfg.n_poses
+    i, j, floor = calib
+    Q = np.stack([sample_joint_path(m, N) for m in motions])
+    C = proxy.fk_spheres(Q.reshape(B * N, 7)).reshape(B, N, proxy.n_spheres, 3)
+    d = np.linalg.norm(C[:, :, i, :] - C[:, :, j, :], axis=-1)
+    gap = d - proxy.radii[i][None, None, :] - proxy.radii[j][None, None, :]
+    slack = (gap - floor[None, None, :]).min(axis=(1, 2))
+    return slack >= 0, slack

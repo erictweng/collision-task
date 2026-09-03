@@ -484,36 +484,77 @@ these two events is not a geometric one.
 
 ## 9. Results
 
-`[B1]` speed and accuracy against truth, at the chosen operating point
-`[B1]` operating curve re-cut at 1 mm across the 0-10 mm band
-`[B2]` Regime A vs Regime B, separately
-`[B3]` degradation under systematic offset / missing / phantom, each alone
+All figures: generator A, n = 1280 motions over 32 layouts, 34% unsafe; the
+held-out set is generator B, n = 640 over 16 layouts, 32% unsafe. Chosen
+operating point: margin 0 mm, 48 poses, licences as fitted in §4.
 
-Provisional degradation, n=320, uniform occlusion:
+### Speed
+
+| | |
+|---|---|
+| Simulation (truth) | 12.1 verdicts/s/core — 45.8 core-hours for 2M candidates |
+| Fast path | ~940 verdicts/s — **77×** |
+| A 100-candidate burst, by simulation | 8.2 s (82× over the 100 ms budget) |
+| The same burst, fast path, 4 hypotheses | 0.43 s — **needs 4 cores to fit the budget, and gets them** |
+
+The 77× is lower than the 190× an earlier draft reported, for two honest
+reasons: pose sampling went from 24 to 48 (measured, §8), and this figure is
+taken over 40-motion batches, which under-amortises the vectorisation. The
+deployment batch is 100 per station, so 77× is a floor rather than a headline.
+
+### Accuracy against truth
+
+| | keep rate | false accepts | of unsafe |
+|---|---:|---:|---:|
+| generator A (tuned on) | 0.456 | 41 | 9.4% |
+| generator B (held out) | 0.628 | 16 | 7.8% |
+| generator B, **+ self-collision check** | 0.401 | **8** | **3.9%** |
+
+### Degradation, each scene error alone
 
 | condition | keep | false accepts |
 |---|---:|---:|
-| perfect | 0.217 | 4 |
-| systematic 8 mm offset | 0.222 | 12 |
-| …with margin inflation | 0.100 | 1 |
-| 15% occluded away | 0.274 | 13 |
-| …with 4 hypotheses | 0.217 | 4 |
-| 2 phantoms | 0.122 | 4 |
-| all three together | **0.004** | 0 |
+| perfect | 0.456 | 41 (9.4%) |
+| systematic 8 mm offset | 0.472 | 43 (9.9%) |
+| …with margin inflated by the drift bound | 0.032 | 0 |
+| 15% of objects occluded away | 0.489 | **79 (18.2%)** |
+| …screened against 4 sampled hypotheses | 0.456 | **41 (9.4%)** |
+| 2 phantom objects | 0.346 | 29 (6.7%) |
+| all three together | 0.013 | 0 |
 
-Offset is exactly cancelled by inflation. Occlusion is exactly cancelled by four
-hypotheses. Phantoms cost yield and nothing else. **All three together produce a
-screener that permits essentially nothing — reported as a failure, not folded
-into an average.**
+Three things to read off this:
 
-**Held-out generator.** B scored *better* than A (keep 0.45 vs 0.22, FA 2 vs 4).
-This is not evidence of generalisation and will not be reported as such: A
-perturbs a good reference so every candidate sits near the decision boundary,
-while B's arcs and drags are mostly obviously fine or obviously terrible. B
-failed to be adversarial. The correct response is to rewrite B against motion
-families A never produced — not to re-tune the screener against it.
+- **Occlusion is the dangerous one.** It doubles false accepts, and it is the
+  only mode that does. Offset and phantoms move yield, not safety — a phantom
+  even *lowers* false accepts, because it rejects more.
+- **Four hypotheses restore the baseline exactly** — 41 false accepts, not
+  approximately 41. Sampling the discrete error and requiring unanimity recovers
+  precisely what occlusion cost, and the speedup budget was sized to afford it.
+- **Margin inflation is a blunt instrument at this operating point.** It removes
+  every false accept and leaves 3% yield. It was the right answer when the margin
+  was large; at margin 0 it simply rejects everything, and `all three together`
+  is the same story. Reported as a failure, not averaged away.
 
----
+### The held-out generator, and what it caught
+
+Generator B scores *better* than A on the headline (0.628 keep vs 0.456). That is
+**not** evidence of generalisation and is not reported as such: A perturbs a good
+reference, so every candidate sits near the decision boundary, while B's arcs and
+drags are mostly obviously fine or obviously terrible. B is the easier set.
+
+But B earned its place anyway, by finding something no amount of tuning on A
+could have:
+
+> **62% of generator B's false accepts were self-collisions. Generator A's:
+> zero.** The screener had no self-collision test at all. A perturbs a reference
+> that never contorts the arm, so the entire failure mode was invisible.
+
+Adding it (§8c) halves B's false accepts, 16 → 8, and **changes generator A's
+numbers not at all** — 0.456 keep and 41 false accepts before and after. A blind
+spot that was free to fix and impossible to see from the training distribution.
+
+That is the real answer to *how much did writing both sides flatter you*: not a
+percentage, a missing check.
 
 ## 9b. Three predictions, three refutations
 
@@ -542,8 +583,65 @@ of them into the design would have cost a great deal more.
 
 ## 10. Failures, walked through
 
-`[B4]` two or three specific motions, what the screener saw, what it decided,
-what happened, and the pattern they share.
+Three real motions, one of each kind.
+
+### L003-A008 — permitted, then crushed the bin it was delivering to (99 N)
+
+What the screener saw: finger-to-`bin0` gap **−14.8 mm**, everything else clear.
+The destination licence allows −20 mm, so it passed.
+
+A *clean* delivery into the same bin uses **−13.5 mm**. The screener was asked to
+separate two events that differ by **1.3 mm of proxy penetration**, from a camera
+estimate, using a proxy whose own approximation error is several millimetres.
+
+It cannot. This is the sharpest statement of the intended-contact limit in the
+whole submission, and it is not a tuning failure — the quantity that separates
+delivering from crushing is *force*, and no geometric threshold recovers it. It
+is the single clearest argument for the runtime trip.
+
+### L000-A001 — rejected, and was perfectly safe
+
+What the screener saw: hand-to-`post1` gap **−20.6 mm**. Truth: the arm never
+touched the post.
+
+The overlap is entirely the sphere proxy. The hand's covering spheres are larger
+than the hand, so a 20 mm "penetration" is a motion passing cleanly by. This is
+the shape of nearly every false reject: not a misjudged trajectory, but the proxy
+being conservative in the direction we chose for it to be conservative.
+
+The pattern: **false rejects are proxy error, false accepts are intent error.**
+They have different causes and different fixes, and averaging them into one
+accuracy number hides that.
+
+### L003-B035 — permitted, and the arm collided with itself at 154 N
+
+What the screener saw: every object clear by a wide margin — the nearest was
+`table` at +56 mm, and every object at over 120 mm.
+
+It was right about all of them. The arm folded into itself, and nothing in the
+screener was watching. Generator A produced no motion contorted enough to expose
+this; generator B, sampling joint space directly, produced twenty-seven.
+
+The fix belongs in Regime A rather than anywhere near the scene estimate:
+self-collision is known geometry on a commanded trajectory, with no camera in the
+path. That it was missing is the most useful thing the held-out set found.
+
+---
+
+## 8c. Self-collision, and the allowed-collision problem
+
+Added after generator B exposed it. The naive version — reject when any two
+non-adjacent link spheres overlap — **rejects 100% of motions**, because a proxy
+that strictly contains the arm necessarily has the shoulder's covering spheres
+reaching into the elbow's in perfectly ordinary poses.
+
+MuJoCo solves the same problem for the real model with an explicit
+`<contact><exclude>` list. The equivalent here is learned rather than declared:
+run configurations that truth says did not self-collide, record how close each
+sphere pair legitimately gets, and require a real self-collision to beat that
+floor by 4 mm. Calibrating against the label rather than against intuition
+matters — hand-picking which link pairs "should" be excluded is exactly how the
+arbitrary parts of a screener get in.
 
 ---
 
