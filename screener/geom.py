@@ -17,27 +17,34 @@ import numpy as np
 
 def sphere_box_gap(centers: np.ndarray, radii: np.ndarray,
                    box_lo: np.ndarray, box_hi: np.ndarray) -> np.ndarray:
-    """Signed gap between spheres and axis-aligned boxes.
+    """Signed gap between spheres and axis-aligned boxes. Negative = overlap.
 
     Broadcasting contract:
         centers  (..., S, 3)
         radii    (..., S)
         box_lo   (..., B, 3)
         box_hi   (..., B, 3)
-    Returns      (..., S, B)  gap; negative means overlap by that depth.
+    Returns      (..., S, B)
 
-    Exact for points outside the box. Inside the box the clamped point is the
-    centre itself, so the gap saturates at -radius rather than reporting true
-    penetration depth. We only ever compare against a threshold, so saturation
-    is harmless -- but it means this number is not a penetration depth and must
-    not be read as one.
+    This is the exact box signed-distance function, INCLUDING the interior. An
+    earlier version clamped the centre into the box and measured to the clamped
+    point, which is correct outside and silently wrong inside: it saturates at
+    -radius for any centre within the box, so every deep penetration reports the
+    same number.
+
+    That mattered. Deliveries into a bin and motions that crushed the same bin
+    both reported a finger gap of exactly -0.0125 m -- the finger sphere radius --
+    so no threshold on this quantity could ever separate them. Reading a
+    saturating quantity as a penetration depth made an intended-contact decision
+    look impossible when it was merely unmeasured.
     """
     c = centers[..., :, None, :]              # (..., S, 1, 3)
     lo = box_lo[..., None, :, :]              # (..., 1, B, 3)
     hi = box_hi[..., None, :, :]
-    nearest = np.clip(c, lo, hi)              # (..., S, B, 3)
-    d = np.linalg.norm(c - nearest, axis=-1)  # (..., S, B)
-    return d - radii[..., :, None]
+    q = np.maximum(lo - c, c - hi)            # >0 outside on that axis
+    outside = np.linalg.norm(np.maximum(q, 0.0), axis=-1)
+    inside = np.minimum(q.max(axis=-1), 0.0)  # <0 only when strictly inside
+    return outside + inside - radii[..., :, None]
 
 
 def boxes_from_center_size(center: np.ndarray, half: np.ndarray):
