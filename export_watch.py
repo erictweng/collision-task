@@ -23,7 +23,11 @@ from screener.geom import sphere_box_gap
 from screener.model import build
 
 CFG = ScreenConfig(margin=0.0)
-N_POSES = 24
+# The animation MUST sample the trajectory at exactly the poses the screener
+# used. Sampling fewer would let a chart show a gap that never dips below a
+# licence on a motion the screener rejected -- which reads as a bug in the view
+# and is really two different samplings of the same path.
+N_POSES = CFG.n_poses
 N_PER_CLASS = 7
 
 
