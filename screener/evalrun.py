@@ -77,8 +77,20 @@ def _proxy_cache(layouts):
 
 
 def evaluate(ds, cfg: ScreenConfig, err: ErrorModel = ErrorModel(),
-             proxy=None, rng_seed=7, n_hypotheses=1):
+             proxy=None, rng_seed=7, n_hypotheses=1, screener=screen):
     """Screen every motion and compare with truth.
+
+    `screener` is the thing under test, and it is an ARGUMENT rather than an
+    import so that this file is a bench and not a wrapper around one algorithm.
+    The contract is:
+
+        screener(motions, estimate: SceneEstimate, proxy, cfg) -> [Verdict]
+
+    where a Verdict carries `.allow` and `.culprit`. Anything satisfying that is
+    measurable here on the same cached truth, the same error models and the same
+    metrics -- which is the only way two screeners can be honestly compared.
+    Note what the signature does NOT offer: no Layout, no model, no Outcome. A
+    screener cannot read the answers even by accident.
 
     n_hypotheses > 1 draws that many independent SceneEstimates from the error
     model and permits a motion only if EVERY hypothesis permits it. That is the
@@ -100,7 +112,7 @@ def evaluate(ds, cfg: ScreenConfig, err: ErrorModel = ErrorModel(),
         for h in range(n_hypotheses):
             est = observe(lay, err, np.random.default_rng(rng_seed + 991 * s + h))
             t0 = time.perf_counter()
-            vs = screen(ms, est, proxy, cfg)
+            vs = screener(ms, est, proxy, cfg)
             screen_time += time.perf_counter() - t0
             for i, v in enumerate(vs):
                 if not v.allow and ok[i]:

@@ -32,13 +32,16 @@ run "1. Invariants — containment, the oracle boundary, executor agreement" \
 run "2. Phase 2+3 — simulate truth, screen, compare (cached unless --rebuild)" \
     "$PY" experiments.py $REBUILD
 
-run "3. Phase 2+3 numbers — speedup with the accuracy cost beside it" \
+run "3. The bench measures the screener it is given, not one it imports" \
+    "$PY" checks/check_bench.py
+
+run "4. Phase 2+3 numbers — speedup with the accuracy cost beside it" \
     "$PY" checks/check_results.py
 
-run "4. Phase 3 — the review view" \
+run "5. Phase 3 — the review view" \
     bash -c "\"$PY\" export_view.py && \"$PY\" build_view.py"
 
-run "5. Submission — does the write-up answer the brief" \
+run "6. Submission — does the write-up answer the brief" \
     "$PY" checks/check_submission.py
 
 echo

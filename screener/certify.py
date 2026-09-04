@@ -342,3 +342,52 @@ def certify_regime_a(motions, proxies, inner_proxies, cfg: CertifyConfig = Certi
     verdict[gap_out >= 0.0] = SAFE
     verdict[gap_in < 0.0] = COLLIDES     # a proof beats a proof-of-the-other-side
     return verdict, gap_out, gap_in
+
+
+class CertificateScreener:
+    """Present the two-sided certificate with Regime A's screener signature.
+
+    The bench scores booleans, and a certificate produces three verdicts. The
+    adapter has to collapse UNKNOWN, and which way it collapses is a policy, not
+    a detail: `unknown_permits=False` is the conservative reading (anything not
+    proven safe is refused), and it is what makes the certificate comparable to a
+    margin screener on the same axes. The three-way split is not thrown away --
+    it is kept on `.last` so the resolve rate is still readable after scoring.
+    """
+
+    def __init__(self, inner_proxies, cfg: CertifyConfig = CertifyConfig(),
+                 unknown_permits: bool = False):
+        self.inner = inner_proxies
+        self.cfg = cfg
+        self.unknown_permits = unknown_permits
+        # The bench calls a screener once per layout, so a single `last` would
+        # report the final batch and silently pass it off as the run. Accumulate.
+        self._verdicts = []
+
+    def __call__(self, motions, proxies, cfg=None):
+        verdict, gap_out, gap_in = certify_regime_a(
+            motions, proxies, self.inner, self.cfg)
+        self._verdicts.append(verdict)
+        allow = (verdict == SAFE) | (self.unknown_permits & (verdict == UNKNOWN))
+        return allow, gap_out
+
+    def reset(self):
+        self._verdicts = []
+
+    @property
+    def verdicts(self):
+        import numpy as np
+        return np.concatenate(self._verdicts) if self._verdicts else np.zeros(0, int)
+
+    @property
+    def resolve_rate(self) -> float:
+        """Fraction of everything screened since the last reset that needed no physics."""
+        v = self.verdicts
+        return float((v != UNKNOWN).mean()) if len(v) else 0.0
+
+    @property
+    def split(self) -> dict:
+        v = self.verdicts
+        return {"n": len(v), "safe": int((v == SAFE).sum()),
+                "collides": int((v == COLLIDES).sum()),
+                "unknown": int((v == UNKNOWN).sum())}

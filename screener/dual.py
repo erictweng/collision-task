@@ -267,12 +267,25 @@ def is_arm_collision(outcome) -> bool:
 
 
 def evaluate_dual(ds, cfg: ScreenConfig = ScreenConfig(), err=None,
-                  margin_a: float = 0.02, n_hypotheses: int = 1, rng_seed=7):
+                  margin_a: float = 0.02, n_hypotheses: int = 1, rng_seed=7,
+                  screener_a=None, screener_b=None):
     """Score the two regimes separately and together.
 
     Regime A is scored against the arm-collision label only, and it is given no
     SceneEstimate at all. Regime B is scored against object collisions, per arm,
     from the estimate. The station's verdict is the conjunction.
+
+    Both regimes take their screener as an argument, with deliberately different
+    contracts because they are given deliberately different information:
+
+        screener_a(dual_motions, proxies, cfg) -> (allow: bool[N], worst: float[N])
+        screener_b(motions, estimate, proxy, cfg) -> [Verdict]
+
+    Regime A's signature has no SceneEstimate in it at all. That absence is the
+    structural claim of the two-regime split: this half of the problem is decided
+    from commanded trajectories and shipped geometry, so no camera error can
+    reach it. Swapping in a different Regime A screener -- a certificate, a
+    learned model -- changes nothing else in this function.
     """
     import time
     from .estimate import ErrorModel, observe
@@ -295,7 +308,8 @@ def evaluate_dual(ds, cfg: ScreenConfig = ScreenConfig(), err=None,
     for s, dms in by.items():
         lay = ds["layouts"][s]
         t0 = time.perf_counter()
-        allow_a, _ = screen_regime_a(dms, proxies, cfg, margin_a)
+        allow_a, _ = (screener_a(dms, proxies, cfg) if screener_a
+                      else screen_regime_a(dms, proxies, cfg, margin_a))
         t_a += time.perf_counter() - t0
 
         ok_b = np.ones(len(dms), dtype=bool)
@@ -304,7 +318,7 @@ def evaluate_dual(ds, cfg: ScreenConfig = ScreenConfig(), err=None,
             for k in range(len(prefixes)):
                 subs = [dm.per_arm[k] for dm in dms]
                 t0 = time.perf_counter()
-                vs = screen(subs, est, proxies[k], cfg)
+                vs = (screener_b or screen)(subs, est, proxies[k], cfg)
                 t_b += time.perf_counter() - t0
                 ok_b &= np.array([v.allow for v in vs])
 
