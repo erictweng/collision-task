@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What the screener sees</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+:root{--ground:#eceef1;--panel:#fff;--sunk:#e3e6ea;--ink:#12171c;--dim:#5a656f;--line:#d3d9de;
+ --accent:#17607f;--accent-soft:#d9e8ef;--ok:#2c7a52;--bad:#ab3327;--warn:#8f5d15;
+ --ok-soft:#dcece3;--bad-soft:#f4dedb;--warn-soft:#f2e7d3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--ground:#13171b;--panel:#1a1f25;
+ --sunk:#161b20;--ink:#e4e9ee;--dim:#98a3ad;--line:#2c333a;--accent:#68b3d2;--accent-soft:#1c2f39;
+ --ok:#66c28e;--bad:#ef8b7e;--warn:#d6a355;--ok-soft:#18291f;--bad-soft:#2e1c1a;--warn-soft:#2a2216;
+ color-scheme:dark}}
+:root[data-theme=dark]{--ground:#13171b;--panel:#1a1f25;--sunk:#161b20;--ink:#e4e9ee;--dim:#98a3ad;
+ --line:#2c333a;--accent:#68b3d2;--accent-soft:#1c2f39;--ok:#66c28e;--bad:#ef8b7e;--warn:#d6a355;
+ --ok-soft:#18291f;--bad-soft:#2e1c1a;--warn-soft:#2a2216;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+ font:15px/1.6 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+header{padding:18px 24px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-family:Archivo,sans-serif;font-size:19px;font-weight:700;letter-spacing:-.015em}
+.sub{color:var(--dim);font-size:13px;margin-top:3px;max-width:80ch}
+main{display:grid;grid-template-columns:274px 1fr;min-height:calc(100vh - 84px)}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+#list{border-right:1px solid var(--line);overflow:auto;max-height:calc(100vh - 84px)}
+#filters{display:flex;flex-wrap:wrap;gap:6px;padding:12px}
+button{font:inherit;cursor:pointer}
+button.f{border:1px solid var(--line);background:var(--panel);color:var(--ink);
+ border-radius:999px;padding:3px 11px;font-size:12px}
+button.f[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.row{padding:9px 12px;border-top:1px solid var(--line);cursor:pointer;display:flex;
+ justify-content:space-between;gap:8px;align-items:baseline}
+.row:hover{background:var(--ground)}
+.row[aria-selected=true]{background:var(--ground);box-shadow:inset 3px 0 0 var(--accent)}
+.mid{font-family:"IBM Plex Mono",monospace;font-size:12px}
+.tag{color:var(--dim);font-size:11px}
+.pill{font-size:10.5px;padding:1px 7px;border-radius:999px;white-space:nowrap;font-family:"IBM Plex Mono",monospace}
+.false_accept{background:var(--bad-soft);color:var(--bad)}
+.false_reject{background:var(--warn-soft);color:var(--warn)}
+.caught,.kept{background:var(--ok-soft);color:var(--ok)}
+#stage{padding:16px 24px 40px;overflow:auto;max-height:calc(100vh - 84px)}
+.verdictbar{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:2px 9px;border-radius:3px}
+.reason{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--bad)}
+.views{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+figure{margin:0}figcaption{color:var(--dim);font-size:11.5px;margin-bottom:5px}
+svg{background:var(--panel);border:1px solid var(--line);border-radius:4px;max-width:100%}
+.controls{display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap}
+button.play{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:4px;
+ padding:5px 16px;font-size:13px;font-weight:500}
+input[type=range]{flex:1;min-width:180px;accent-color:var(--accent)}
+.tnum{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--dim);min-width:104px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--dim)}
+.legend i{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:-1px}
+.note{color:var(--dim);font-size:12.5px;max-width:74ch;margin-top:12px}
+.empty{color:var(--dim);padding:40px 24px}
+</style></head><body>
+<header>
+<h1>What the screener sees</h1>
+<div class="sub">Not a render of the robot &mdash; the screener's own representation. Circles are the sphere
+proxy of the arm, rectangles are the boxes it believes the objects are. Play a motion and watch the gap
+close. <b>Verdict</b> is what it decided from this picture; <b>outcome</b> is what happened when the motion
+really ran.</div>
+</header>
+<main>
+ <div id="list"><div id="filters"></div><div id="rows"></div></div>
+ <div id="stage"><div class="empty">Select a motion.</div></div>
+</main>
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+const D=JSON.parse(document.getElementById('payload').textContent);
+const M=D.motions,L=D.layouts,RAD=D.radii,GRP=D.group,NP=D.config.n_poses;
+const LABEL={false_accept:'false accept',false_reject:'false reject',caught:'caught',kept:'kept'};
+let filter='false_accept',sel=null,frame=0,playing=false,timer=null;
+
+const FILTERS=[['false_accept','False accepts'],['false_reject','False rejects'],
+               ['caught','Caught'],['kept','Kept'],['all','All']];
+document.getElementById('filters').innerHTML=FILTERS.map(([k,l])=>
+ `<button class="f" data-k="${k}" aria-pressed="${k===filter}">${l}</button>`).join('');
+document.getElementById('filters').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+ filter=b.dataset.k;document.querySelectorAll('button.f').forEach(x=>
+  x.setAttribute('aria-pressed',x.dataset.k===filter));renderList();};
+
+function renderList(){
+ const rows=M.filter(m=>filter==='all'||m.cls===filter);
+ document.getElementById('rows').innerHTML=rows.length?rows.map(m=>`
+  <div class="row" data-id="${m.mid}" aria-selected="${sel===m.mid}">
+   <div><div class="mid">${m.mid}</div><div class="tag">${m.tag} &middot; ${m.layout}</div></div>
+   <div class="pill ${m.cls}">${LABEL[m.cls]}</div></div>`).join('')
+  :'<div class="empty" style="padding:24px 12px">None in this category.</div>';
+ document.querySelectorAll('.row').forEach(r=>r.onclick=()=>{
+   sel=r.dataset.id;frame=0;stop();renderList();renderStage();});
+}
+
+function bounds(m,ax,ay){
+ const lay=L[m.layout];let xs=[],ys=[];
+ lay.parts.forEach(p=>{xs.push(p.lo[ax],p.hi[ax]);ys.push(p.lo[ay],p.hi[ay]);});
+ m.spheres.forEach(pose=>pose.forEach((c,i)=>{
+   xs.push(c[ax]-RAD[i],c[ax]+RAD[i]);ys.push(c[ay]-RAD[i],c[ay]+RAD[i]);}));
+ return [Math.min(...xs),Math.max(...xs),Math.min(...ys),Math.max(...ys)];
+}
+const SPHCOL=['var(--dim)','var(--accent)','var(--ok)'];   // body, hand, finger
+
+function view(m,ax,ay,w,h,label,flipY){
+ const lay=L[m.layout],[x0,x1,y0,y1]=bounds(m,ax,ay),pad=40;
+ const sx=v=>(v-x0)/(x1-x0||1)*(w-2*pad)+pad;
+ const sy=v=>flipY?(h-pad)-(v-y0)/(y1-y0||1)*(h-2*pad):(v-y0)/(y1-y0||1)*(h-2*pad)+pad;
+ const sr=r=>Math.max(r/(x1-x0||1)*(w-2*pad),1);
+ let s=`<figure><figcaption>${label}</figcaption><svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">`;
+ lay.parts.forEach(p=>{
+  const t=p.owner===m.target,d=p.owner===m.dest,b=p.owner===m.blamed;
+  const col=t?'var(--ok)':d?'var(--accent)':b?'var(--bad)':'var(--dim)';
+  const X=sx(Math.min(p.lo[ax],p.hi[ax])),X2=sx(Math.max(p.lo[ax],p.hi[ax]));
+  const Y=sy(p.lo[ay]),Y2=sy(p.hi[ay]);
+  s+=`<rect x="${X}" y="${Math.min(Y,Y2)}" width="${Math.max(X2-X,1.5)}"
+      height="${Math.max(Math.abs(Y2-Y),1.5)}" fill="${col}" fill-opacity="${b?.28:.13}"
+      stroke="${col}" stroke-width="1"/>`;});
+ const pose=m.spheres[frame];
+ pose.forEach((c,i)=>{
+  s+=`<circle cx="${sx(c[ax]).toFixed(1)}" cy="${sy(c[ay]).toFixed(1)}" r="${sr(RAD[i]).toFixed(1)}"
+      fill="${SPHCOL[GRP[i]]}" fill-opacity=".16" stroke="${SPHCOL[GRP[i]]}" stroke-width=".8"/>`;});
+ // ghost of the tool path
+ const tip=m.spheres.map(p=>p[p.length-1]);
+ s+=`<path d="${tip.map((c,i)=>`${i?'L':'M'}${sx(c[ax]).toFixed(1)},${sy(c[ay]).toFixed(1)}`).join('')}"
+     fill="none" stroke="var(--ink)" stroke-width="1" stroke-opacity=".3" stroke-dasharray="3 3"/>`;
+ return s+'</svg></figure>';
+}
+
+function gapChart(m,w,h){
+ const names=Object.keys(m.gaps).filter(n=>n!=='table')
+   .sort((a,b)=>Math.min(...m.gaps[a])-Math.min(...m.gaps[b])).slice(0,5);
+ let lo=0,hi=0;names.forEach(n=>m.gaps[n].forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+ hi=Math.max(hi,20);lo=Math.min(lo,-20);
+ const pad=44,sx=i=>i/(NP-1)*(w-pad-14)+pad,sy=v=>(h-26)-(v-lo)/(hi-lo)*(h-46);
+ let s=`<figure><figcaption>Closest gap to each object, through the motion &mdash; below the line is overlap</figcaption>
+  <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">`;
+ s+=`<line x1="${pad}" y1="${sy(0)}" x2="${w-14}" y2="${sy(0)}" stroke="currentColor" stroke-opacity=".35" stroke-width="1"/>`;
+ s+=`<text x="${pad-6}" y="${sy(0)+4}" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="10" fill="currentColor" opacity=".6">0</text>`;
+ const cols=['var(--bad)','var(--warn)','var(--accent)','var(--ok)','var(--dim)'];
+ names.forEach((n,k)=>{
+  const d=m.gaps[n].map((v,i)=>`${i?'L':'M'}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join('');
+  s+=`<path d="${d}" fill="none" stroke="${cols[k%5]}" stroke-width="1.6"/>`;
+  s+=`<text x="${w-12}" y="${sy(m.gaps[n][NP-1])+3}" text-anchor="end" font-family="IBM Plex Mono,monospace"
+      font-size="10" fill="${cols[k%5]}">${n}</text>`;});
+ s+=`<line x1="${sx(frame)}" y1="14" x2="${sx(frame)}" y2="${h-22}" stroke="var(--ink)" stroke-width="1.2" stroke-opacity=".8"/>`;
+ names.forEach((n,k)=>{s+=`<circle cx="${sx(frame)}" cy="${sy(m.gaps[n][frame])}" r="3" fill="${cols[k%5]}"/>`;});
+ return s+'</svg></figure>';
+}
+
+function renderStage(){
+ const m=M.find(x=>x.mid===sel);if(!m)return;
+ const near=Object.entries(m.gaps).filter(([n])=>n!=='table')
+   .map(([n,v])=>[n,v[frame]]).sort((a,b)=>a[1]-b[1])[0];
+ document.getElementById('stage').innerHTML=`
+  <div class="verdictbar">
+   <div class="mid" style="font-size:15px">${m.mid}</div>
+   <span class="badge ${m.allow?'caught':'false_accept'}">verdict: ${m.allow?'PERMIT':'REJECT'}</span>
+   <span class="badge ${m.unsafe?'false_accept':'caught'}">outcome: ${m.unsafe?'COLLIDED':'safe'}</span>
+   <span class="pill ${m.cls}">${LABEL[m.cls]}</span>
+   <span class="tag">${m.tag} &middot; grasp ${m.target} &rarr; deliver to ${m.dest}</span>
+  </div>
+  ${m.unsafe?`<div class="reason">${m.reasons.join(' &middot; ')}</div>`:''}
+  <div class="views">${view(m,0,1,430,300,'Top down &mdash; x across, y up the page',false)}
+   ${view(m,0,2,430,300,'Side on &mdash; x across, height up',true)}</div>
+  <div class="controls">
+   <button class="play" id="play">${playing?'Pause':'Play'}</button>
+   <input type="range" id="scrub" min="0" max="${NP-1}" value="${frame}">
+   <span class="tnum">pose ${frame+1}/${NP}</span>
+   <span class="tnum" style="min-width:170px">nearest: ${near[0]} ${near[1]} mm</span>
+  </div>
+  <div class="legend"><span><i style="background:var(--dim)"></i>arm</span>
+   <span><i style="background:var(--accent)"></i>hand</span>
+   <span><i style="background:var(--ok)"></i>fingers</span>
+   <span><i style="background:var(--ok);border-radius:2px"></i>target object</span>
+   <span><i style="background:var(--accent);border-radius:2px"></i>destination bin</span>
+   <span><i style="background:var(--bad);border-radius:2px"></i>what the screener blamed</span></div>
+  ${gapChart(m,880,210)}
+  <div class="note">Overlap with the target and the destination is expected &mdash; fingers close around a
+  cube and the gripper enters the bin. That is what the per-body licences allow, and it is why a raw
+  clearance rule cannot work here.</div>`;
+ document.getElementById('play').onclick=()=>playing?stop():play();
+ document.getElementById('scrub').oninput=e=>{frame=+e.target.value;stop();renderStage();};
+}
+function play(){playing=true;timer=setInterval(()=>{frame=(frame+1)%NP;renderStage();},110);renderStage();}
+function stop(){playing=false;if(timer)clearInterval(timer);timer=null;}
+renderList();
+</script></body></html>

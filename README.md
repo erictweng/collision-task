@@ -33,7 +33,8 @@ python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 
 python experiments.py --rebuild   # ~4 min: simulates truth, writes out/results.json
-python export_view.py && python build_view.py   # writes out/view.html
+python export_view.py  && python build_view.py    # out/view.html   - static review, all 240 motions
+python export_watch.py && python build_watch.py   # out/watch.html  - animated, 28 motions, balanced
 ```
 
 `experiments.py` without `--rebuild` reuses the cached datasets in `out/`.
