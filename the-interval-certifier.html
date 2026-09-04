@@ -1,0 +1,433 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>The Interval Certifier</title>
+<style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --ground:#EFF1F1; --surface:#F8FAFA; --sunk:#E4E8E8;
+  --ink:#141A1C; --ink-2:#485255; --muted:#7C8789;
+  --rule:#D2D8D8; --rule-soft:#E2E7E7;
+  --accent:#0F6B62; --accent-soft:#0F6B6216;
+  --warn:#96570F; --warn-soft:#96570F1A; --crit:#A32E1F; --crit-soft:#A32E1F1A;
+  --shadow:0 1px 2px rgba(20,26,28,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1315; --surface:#161B1E; --sunk:#1D2427;
+    --ink:#E5EAEA; --ink-2:#A6B1B3; --muted:#7B8688;
+    --rule:#2A3134; --rule-soft:#222829;
+    --accent:#45B8A6; --accent-soft:#45B8A61F;
+    --warn:#D59A4A; --warn-soft:#D59A4A1F; --crit:#E4755F; --crit-soft:#E4755F1F;
+    --shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1315; --surface:#161B1E; --sunk:#1D2427;
+  --ink:#E5EAEA; --ink-2:#A6B1B3; --muted:#7B8688;
+  --rule:#2A3134; --rule-soft:#222829;
+  --accent:#45B8A6; --accent-soft:#45B8A61F;
+  --warn:#D59A4A; --warn-soft:#D59A4A1F; --crit:#E4755F; --crit-soft:#E4755F1F;
+  --shadow:0 1px 2px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Serif",Georgia,serif;font-size:17px;line-height:1.65;
+  margin:0;padding:0 24px 100px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto}
+h1,h2,h3,.tag{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+.eyebrow,.mono,.tag,code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+code{font-size:.86em;background:var(--sunk);padding:1px 5px;border-radius:2px}
+
+header{padding:64px 0 0}
+.kicker{display:flex;gap:18px;flex-wrap:wrap;border-bottom:1px solid var(--rule);
+  padding-bottom:14px;margin-bottom:34px}
+h1{font-size:clamp(36px,6vw,54px);line-height:1.05;letter-spacing:-.03em;font-weight:800;
+  margin:0 0 24px;max-width:13ch;text-wrap:balance}
+
+section{margin:70px 0 0}
+.sec-head{display:flex;gap:14px;align-items:baseline;margin:0 0 22px;
+  border-top:1px solid var(--rule);padding-top:18px}
+.sec-head .eyebrow{color:var(--accent);flex:none;padding-top:3px}
+h2{font-size:clamp(22px,3.3vw,27px);line-height:1.18;letter-spacing:-.02em;font-weight:700;
+  margin:0;text-wrap:balance}
+h3{font-size:15.5px;font-weight:700;margin:0 0 9px}
+p{margin:0 0 18px;max-width:68ch}
+strong{font-weight:600}
+
+.contract{display:grid;grid-template-columns:1fr auto 1fr;gap:0;border:1px solid var(--rule);
+  background:var(--surface);box-shadow:var(--shadow);margin:0 0 22px;align-items:stretch}
+@media (max-width:660px){.contract{grid-template-columns:1fr}}
+.contract > div{padding:22px 26px}
+.contract .mid{display:flex;align-items:center;justify-content:center;
+  border-left:1px solid var(--rule-soft);border-right:1px solid var(--rule-soft);
+  background:var(--sunk);font-family:"IBM Plex Mono",monospace;font-size:20px;color:var(--accent)}
+@media (max-width:660px){.contract .mid{border:0;border-top:1px solid var(--rule-soft);
+  border-bottom:1px solid var(--rule-soft);padding:8px}}
+.contract .eyebrow{display:block;margin-bottom:10px}
+.contract ul{margin:0;padding-left:18px;font-size:15px;line-height:1.6}
+.contract li::marker{color:var(--muted)}
+.verdict{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.pill{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.06em;
+  padding:5px 11px;border:1px solid var(--accent);color:var(--accent)}
+.pill.u{border-color:var(--warn);color:var(--warn)}
+
+.note{background:var(--surface);border:1px solid var(--rule);border-left:2px solid var(--crit);
+  padding:22px 26px;margin:0 0 22px;box-shadow:var(--shadow)}
+.note p:last-child{margin-bottom:0}
+.note .eyebrow{color:var(--crit);display:block;margin-bottom:9px}
+
+figure{margin:0 0 26px}
+.plot{background:var(--surface);border:1px solid var(--rule);padding:20px 14px 10px;
+  overflow-x:auto;box-shadow:var(--shadow)}
+.plot svg{display:block;min-width:600px;width:100%;height:auto;color:var(--ink-2)}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:11px;line-height:1.55;max-width:74ch}
+.bx{fill:var(--surface);stroke:currentColor;stroke-width:1.2}
+.bx.pure{stroke:var(--accent);stroke-width:1.6}
+.bx.sim{stroke:var(--warn);stroke-width:1.6}
+.bt{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:500;fill:var(--ink)}
+.bs{font-family:"IBM Plex Mono",monospace;font-size:10px;fill:var(--muted)}
+.fl{stroke:currentColor;stroke-width:1.2;fill:none}
+.al{font-family:"IBM Plex Mono",monospace;font-size:9.5px;fill:var(--muted)}
+.lane{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;fill:var(--muted)}
+.wall{stroke:var(--crit);stroke-width:1.2;stroke-dasharray:5 4}
+.wall-t{font-family:"IBM Plex Mono",monospace;font-size:10.5px;fill:var(--crit)}
+.link{stroke:var(--ink-2);stroke-width:9;stroke-linecap:round;fill:none}
+.rho{stroke:var(--accent);stroke-width:1.3;stroke-dasharray:4 3;fill:none}
+.lbl{font-family:"IBM Plex Mono",monospace;font-size:11.5px;fill:var(--accent)}
+.lbl.m{fill:var(--muted)}
+.lbl.w{fill:var(--warn)}
+.core{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.halo{fill:none;stroke:var(--warn);stroke-width:1.3;stroke-dasharray:4 3}
+.jt{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.6}
+.sweep{stroke-linecap:round;fill:none;opacity:.30}
+.panel-t{font-family:Archivo,sans-serif;font-size:12px;font-weight:700;fill:var(--ink)}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--rule);background:var(--surface);
+  box-shadow:var(--shadow);margin:0 0 16px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);font-weight:500;text-align:left;
+  padding:12px 16px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:11px 16px;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.5}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",monospace;font-size:13px}
+td.mod,td.sig{font-family:"IBM Plex Mono",monospace;font-size:12.5px;white-space:nowrap}
+td.mod{color:var(--accent)}
+tr.gate td:first-child{font-family:"IBM Plex Mono",monospace;color:var(--accent);font-size:12px}
+.dim{color:var(--muted)}
+.note-s{font-size:13.5px;color:var(--muted);margin:0 0 22px;line-height:1.55;max-width:72ch}
+
+.formula{background:var(--sunk);border:1px solid var(--rule);padding:20px 26px;margin:0 0 20px;
+  font-family:"IBM Plex Mono",monospace;font-size:16px;line-height:1.9;text-align:center}
+.formula small{display:block;font-size:12px;color:var(--muted);margin-top:8px;
+  font-family:"IBM Plex Serif",serif;font-style:italic;line-height:1.5}
+
+ul.plain{list-style:none;margin:0 0 20px;padding:0;border-top:1px solid var(--rule-soft)}
+ul.plain li{padding:13px 0;border-bottom:1px solid var(--rule-soft);
+  display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline;
+  font-size:15.5px;line-height:1.56;max-width:76ch}
+ul.plain li .m{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--crit)}
+ul.plain li b{font-weight:600}
+
+footer{margin-top:60px;border-top:1px solid var(--rule);padding-top:18px;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);
+  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head><body>
+
+<div class="wrap">
+
+<header>
+  <div class="kicker">
+    <span class="eyebrow">Pantheon · motion screener</span>
+    <span class="eyebrow">v1 rebuild</span>
+    <span class="eyebrow">KCCD</span>
+  </div>
+  <h1>The Interval Certifier</h1>
+</header>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">01</span><h2>The contract</h2></div>
+
+  <div class="contract">
+    <div>
+      <span class="eyebrow">In</span>
+      <ul>
+        <li>Two commanded joint trajectories</li>
+        <li>One kinematic model containing both arms</li>
+      </ul>
+    </div>
+    <div class="mid">→</div>
+    <div>
+      <span class="eyebrow">Out</span>
+      <div class="verdict">
+        <span class="pill">CLEAR</span><span class="pill u">UNKNOWN</span>
+      </div>
+      <p style="margin:12px 0 0;font-size:14.5px;line-height:1.55">CLEAR means proven no arm-arm contact <em>anywhere on the path</em> — not at sampled instants.</p>
+    </div>
+  </div>
+  <p class="note-s">No camera. No simulator at runtime. Nothing fitted, nothing tuned.</p>
+
+  <div class="note">
+    <span class="eyebrow">Say this to Mo explicitly</span>
+    <p><strong>An outer certificate is a pass filter, not a fail filter.</strong> His words were “eliminate definitive failures,” which is literally the <em>inner</em> certificate — the one that proves a motion collides.</p>
+    <p>I'm proposing the pass filter first because the research says it's the higher-value half and the resolve rate will settle it. But that is a substitution, and it needs saying out loud rather than hoping it reads as the same thing.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">02</span><h2>The mechanism, and why it isn't sampling</h2></div>
+
+  <p>Sampling a trajectory at N poses tests N instants and says nothing about the time between them. Two arms can cross entirely inside one interval with both endpoints clear. That hole is why the old design needed a travel-bound patch bolted on afterwards.</p>
+
+  <figure>
+    <div class="plot">
+      <svg viewBox="0 0 760 300" role="img" aria-label="Left panel: two arm paths crossing, with spheres drawn only at the two sampled instants, which are far apart and look clear. Right panel: the same paths drawn as swept volumes, which visibly intersect at the crossing.">
+        <text class="panel-t" x="30" y="28">Sampled at two instants</text>
+        <text class="panel-t" x="415" y="28">The interval between them</text>
+
+        <line x1="55" y1="150" x2="305" y2="150" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="180" y1="60" x2="180" y2="240" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>
+        <circle class="core" cx="55" cy="150" r="18"/>
+        <circle class="core" cx="305" cy="150" r="18"/>
+        <circle cx="180" cy="60" r="18" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/>
+        <circle cx="180" cy="240" r="18" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/>
+        <text class="lbl" x="55" y="128" text-anchor="middle">A · t₀</text>
+        <text class="lbl" x="305" y="128" text-anchor="middle">A · t₁</text>
+        <text class="lbl w" x="180" y="38" text-anchor="middle">B · t₀</text>
+        <text class="lbl w" x="180" y="268" text-anchor="middle">B · t₁</text>
+        <text class="bs" x="180" y="288" text-anchor="middle">both instants clear — verdict: safe</text>
+
+        <line x1="380" y1="20" x2="380" y2="290" stroke="var(--rule)" stroke-width="1"/>
+
+        <line class="sweep" x1="440" y1="150" x2="690" y2="150" stroke="var(--accent)" stroke-width="36"/>
+        <line class="sweep" x1="565" y1="60" x2="565" y2="240" stroke="var(--warn)" stroke-width="36"/>
+        <circle cx="565" cy="150" r="24" fill="none" stroke="var(--crit)" stroke-width="1.6" stroke-dasharray="3 3"/>
+        <circle class="core" cx="440" cy="150" r="18"/>
+        <circle class="core" cx="690" cy="150" r="18"/>
+        <circle cx="565" cy="60" r="18" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/>
+        <circle cx="565" cy="240" r="18" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/>
+        <text class="lbl" x="640" y="196" fill="var(--crit)">they cross here</text>
+        <text class="bs" x="565" y="288" text-anchor="middle">swept volumes intersect — verdict: not clear</text>
+      </svg>
+    </div>
+    <figcaption>The same pair of trajectories, read two ways. The certifier only ever reasons about the right-hand picture, so the hole on the left cannot exist.</figcaption>
+  </figure>
+
+  <h3>The motion bound</h3>
+  <p>For a point on link L, if upstream joint <em>i</em> rotates by δᵢ over an interval, that point can move no further than δᵢ times its perpendicular distance from joint <em>i</em>'s axis. Sum over every upstream joint and you have a bound on how far <em>any</em> point of L travels during the interval.</p>
+
+  <figure>
+    <div class="plot">
+      <svg viewBox="0 0 680 300" role="img" aria-label="A two-joint chain. Dashed lines mark the perpendicular distance from each joint axis to a point P on the far link. A solid circle at P is the proxy sphere; a larger dashed circle is that sphere inflated by half the motion bound.">
+        <line class="link" x1="90" y1="255" x2="175" y2="115"/>
+        <line class="link" x1="175" y1="115" x2="430" y2="145"/>
+        <circle class="jt" cx="90" cy="255" r="7"/>
+        <circle class="jt" cx="175" cy="115" r="7"/>
+        <text class="lbl m" x="90" y="280" text-anchor="middle">joint 1</text>
+        <text class="lbl m" x="163" y="98" text-anchor="end">joint 2</text>
+        <text class="lbl m" x="255" y="103">link L</text>
+
+        <path class="rho" d="M90,255 L395,200"/>
+        <path class="rho" d="M175,115 L395,200"/>
+        <text class="lbl" x="290" y="238">ρ₁(L)</text>
+        <text class="lbl" x="272" y="152">ρ₂(L)</text>
+
+        <circle class="halo" cx="395" cy="200" r="42"/>
+        <circle class="core" cx="395" cy="200" r="21"/>
+        <circle cx="395" cy="200" r="2.5" fill="var(--accent)"/>
+
+        <line class="fl" x1="452" y1="196" x2="425" y2="196"/>
+        <text class="lbl" x="459" y="200">r — the proxy sphere</text>
+        <line class="fl" x1="452" y1="243" x2="424" y2="231"/>
+        <text class="lbl w" x="459" y="247">r + ½ · bound(L)</text>
+        <text class="bs" x="459" y="264">everywhere L can be, this interval</text>
+      </svg>
+    </div>
+    <figcaption>ρ values are static constants of the chain, computed once and conservative over the whole joint range. Nothing here depends on the trajectory.</figcaption>
+  </figure>
+
+  <div class="formula">
+    bound(L, δ) &nbsp;=&nbsp; Σᵢ &nbsp; δᵢ · ρᵢ(L)
+    <small>ρᵢ(L) — the largest perpendicular distance from joint i's axis to any point of link L</small>
+  </div>
+
+  <h3>The test, and subdivision</h3>
+  <p>Evaluate forward kinematics <strong>once</strong>, at the interval's midpoint configuration. Inflate every sphere by half its link's bound. Test all cross-arm sphere pairs. If the minimum gap is positive, the segment is clear <em>over its entire duration</em>. If not, bisect: δ halves, so the inflation halves with it.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Depth</th><th class="n">Segments</th><th class="n">δ per joint</th><th class="n">Inflation</th><th class="n">FK evaluations</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td class="n">1</td><td class="n">δ</td><td class="n">b / 2</td><td class="n">1</td></tr>
+        <tr><td>1</td><td class="n">2</td><td class="n">δ / 2</td><td class="n">b / 4</td><td class="n">2</td></tr>
+        <tr><td>2</td><td class="n">4</td><td class="n">δ / 4</td><td class="n">b / 8</td><td class="n">4</td></tr>
+        <tr><td>d</td><td class="n">2<sup>d</sup></td><td class="n">δ / 2<sup>d</sup></td><td class="n">b / 2<sup>d+1</sup></td><td class="n">2<sup>d</sup></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note-s">Cost is adaptive, which is the good property: an easy motion certifies at depth 0 with a single test, and only near-misses pay for refinement. Past the depth cap, return UNKNOWN. This also yields a second reportable number besides resolve rate — <strong>sphere-pair tests per verdict</strong>.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">03</span><h2>Module architecture</h2></div>
+
+  <p>The organising constraint is a single import rule: <strong>proxy, bounds, trajectory and certify import no mujoco.</strong> One assertion in the test suite enforces it, which turns “this doesn't use the simulator” from a claim into something CI checks.</p>
+
+  <figure>
+    <div class="plot">
+      <svg viewBox="0 0 780 440" role="img" aria-label="Module dependency diagram. robot.py, generate.py and oracle.py sit on the mujoco side of a dashed wall. proxy.py, bounds.py, trajectory.py and certify.py sit on the pure-numpy side. Static tables cross the wall once at startup; ground-truth labels cross into evaluate.py.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1 10,5 0,9" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <text class="lane" x="24" y="24">imports mujoco</text>
+        <text class="lane" x="290" y="24">pure numpy — the runtime path</text>
+
+        <line class="wall" x1="248" y1="34" x2="248" y2="420"/>
+        <text class="wall-t" x="252" y="416">← asserted in tests/</text>
+
+        <rect class="bx sim" x="24" y="44" width="190" height="74" rx="2"/>
+        <text class="bt" x="119" y="70" text-anchor="middle">robot.py</text>
+        <text class="bs" x="119" y="88" text-anchor="middle">two-arm model, chain,</text>
+        <text class="bs" x="119" y="102" text-anchor="middle">meshes, axes, anchors</text>
+
+        <rect class="bx sim" x="24" y="172" width="190" height="62" rx="2"/>
+        <text class="bt" x="119" y="198" text-anchor="middle">generate.py</text>
+        <text class="bs" x="119" y="216" text-anchor="middle">trajectory pairs</text>
+
+        <rect class="bx sim" x="24" y="296" width="190" height="62" rx="2"/>
+        <text class="bt" x="119" y="322" text-anchor="middle">oracle.py</text>
+        <text class="bs" x="119" y="340" text-anchor="middle">did A touch B — boolean</text>
+
+        <rect class="bx pure" x="292" y="40" width="168" height="56" rx="2"/>
+        <text class="bt" x="376" y="64" text-anchor="middle">proxy.py</text>
+        <text class="bs" x="376" y="80" text-anchor="middle">outer spheres per link</text>
+
+        <rect class="bx pure" x="292" y="112" width="168" height="56" rx="2"/>
+        <text class="bt" x="376" y="136" text-anchor="middle">bounds.py</text>
+        <text class="bs" x="376" y="152" text-anchor="middle">ρ[link][joint]</text>
+
+        <rect class="bx pure" x="292" y="184" width="168" height="56" rx="2"/>
+        <text class="bt" x="376" y="208" text-anchor="middle">trajectory.py</text>
+        <text class="bs" x="376" y="224" text-anchor="middle">waypoints, segments</text>
+
+        <rect class="bx pure" x="536" y="96" width="216" height="88" rx="2"/>
+        <text class="bt" x="644" y="124" text-anchor="middle">certify.py</text>
+        <text class="bs" x="644" y="142" text-anchor="middle">interval test + subdivision</text>
+        <text class="bs" x="644" y="158" text-anchor="middle">→ CLEAR / UNKNOWN</text>
+        <text class="bs" x="644" y="172" text-anchor="middle">→ pair-test count</text>
+
+        <rect class="bx" x="292" y="308" width="460" height="66" rx="2"/>
+        <text class="bt" x="522" y="334" text-anchor="middle">evaluate.py</text>
+        <text class="bs" x="522" y="352" text-anchor="middle">soundness · resolve rate · cost</text>
+
+        <polyline class="fl" points="214,68 268,68 268,68 288,68" marker-end="url(#a2)"/>
+        <polyline class="fl" points="214,96 240,96 240,140 288,140" marker-end="url(#a2)"/>
+        <text class="al" x="222" y="60">static tables, once at startup</text>
+
+        <line class="fl" x1="214" y1="203" x2="288" y2="212" marker-end="url(#a2)"/>
+        <text class="al" x="222" y="228">waypoints</text>
+
+        <polyline class="fl" points="214,327 250,327 250,340 288,340" marker-end="url(#a2)"/>
+        <text class="al" x="222" y="318">ground truth</text>
+
+        <polyline class="fl" points="460,68 500,68 500,120 532,120" marker-end="url(#a2)"/>
+        <line class="fl" x1="460" y1="140" x2="532" y2="140" marker-end="url(#a2)"/>
+        <polyline class="fl" points="460,212 500,212 500,160 532,160" marker-end="url(#a2)"/>
+        <polyline class="fl" points="644,184 644,270 620,270 620,304" marker-end="url(#a2)"/>
+        <text class="al" x="628" y="262" text-anchor="end">verdicts + cost</text>
+      </svg>
+    </div>
+    <figcaption>Only two things cross the wall: static tables built once at startup, and ground-truth labels that reach the evaluator without ever reaching the certifier. A verdict is computed entirely on the right-hand side.</figcaption>
+  </figure>
+
+  <h3>What each module exposes</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Module</th><th>Surface</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="mod">robot.py</td><td class="sig">load_station() → Station</td><td class="dim">chain, axes, anchors, meshes, joint ranges. The only mujoco in the build path.</td></tr>
+        <tr><td class="mod">proxy.py</td><td class="sig">fit(meshes) → Spheres</td><td class="dim">centres, radii, link index. Over-approximating by construction.</td></tr>
+        <tr><td class="mod">bounds.py</td><td class="sig">motion_radii(chain, spheres) → ρ</td><td class="dim">(n_links × n_joints). Static, conservative over the whole joint range.</td></tr>
+        <tr><td class="mod">trajectory.py</td><td class="sig">Segment(q0, q1) · midpoint · delta · bisect</td><td class="dim">No time semantics beyond the interval itself.</td></tr>
+        <tr><td class="mod">certify.py</td><td class="sig">certify(segA, segB, tables, max_depth)</td><td class="dim">→ (verdict, n_pair_tests). Recursive; the whole runtime path.</td></tr>
+        <tr><td class="mod">oracle.py</td><td class="sig">contacted(trajA, trajB) → bool</td><td class="dim">Any geom of arm A touching any geom of arm B. Plain boolean.</td></tr>
+        <tr><td class="mod">generate.py</td><td class="sig">pairs(n, rng) → [(TrajA, TrajB)]</td><td class="dim">Must include deliberate contention, or the result is vacuous.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note-s">Adjacency comes from the kinematic tree, not from sampling. <strong>Zero cross-arm exclusions, ever</strong> — a sampled allowed-collision matrix would disable exactly the pairs this exists to catch.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">04</span><h2>Verification, in order, because each gates the next</h2></div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Gate</th><th>Test</th><th>If it fails</th></tr></thead>
+      <tbody>
+        <tr class="gate"><td>1</td><td><strong>Containment.</strong> Every collision-mesh vertex falls inside some outer sphere.</td><td class="dim">Nothing downstream means anything.</td></tr>
+        <tr class="gate"><td>2</td><td><strong>Forward kinematics</strong> against MuJoCo's own body transforms.</td><td class="dim">Every position is wrong; the bound is measuring the wrong geometry.</td></tr>
+        <tr class="gate"><td>3</td><td><strong>Motion bound.</strong> Sample configurations inside an interval and assert actual point displacement never exceeds the computed bound.</td><td class="dim">CLEAR is unsound and everything looks fine until it doesn't.</td></tr>
+        <tr class="gate"><td>4</td><td><strong>Certificate soundness</strong> against the oracle: zero CLEAR verdicts that actually collided.</td><td class="dim">A bug, not a tuning issue. There is no threshold to move.</td></tr>
+        <tr class="gate"><td>5</td><td><strong>Resolve rate and cost.</strong></td><td class="dim">The feature isn't worth having.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note-s">Gate 3 is the one that would get skipped and the one that matters. An under-estimating ρ produces a certifier that is fast, confident, and quietly wrong.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">05</span><h2>Build sequence</h2></div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th class="n">Step</th><th>Work</th><th>Ends with</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td class="sig">robot.py · proxy.py · containment test</td><td>Spheres proven to contain the arm</td></tr>
+        <tr><td class="n">2</td><td class="sig">kinematics in robot.py · FK test</td><td>Positions matching MuJoCo</td></tr>
+        <tr><td class="n">3</td><td class="sig">bounds.py · motion-bound test</td><td><strong>The soundness foundation, verified</strong></td></tr>
+        <tr><td class="n">4</td><td class="sig">trajectory.py · certify.py</td><td>CLEAR / UNKNOWN verdicts</td></tr>
+        <tr><td class="n">5</td><td class="sig">oracle.py · generate.py</td><td>Labelled trajectory pairs</td></tr>
+        <tr><td class="n">6</td><td class="sig">evaluate.py</td><td><strong>The resolve rate</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note-s">Steps 1–3 are where the design either holds or doesn't. Step 6 is the number the feature lives on.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">06</span><h2>Non-goals, stated up front</h2></div>
+  <ul class="plain">
+    <li><span class="m">✕</span><span><b>No objects, table, camera or scene estimate.</b> Regime A only.</span></li>
+    <li><span class="m">✕</span><span><b>No intent, targets or licences.</b> Two arms have no legitimate contact, so nothing needs permission — which is exactly what makes this the cleanest case in the system.</span></li>
+    <li><span class="m">✕</span><span><b>No self-collision in v1.</b> Adjacent links touch by design, and that needs an allowed-collision matrix whose sampled <code>NEVER</code> entries carry an unquantified false-negative rate.</span></li>
+    <li><span class="m">✕</span><span><b>No inner certificate</b> until the outer resolve rate says whether it's worth it.</span></li>
+    <li><span class="m">✕</span><span><b>No force trip.</b> It ships with the arm at 20 N.</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">07</span><h2>Two things to carry into the build</h2></div>
+  <p><strong>The 6 N versus 20 N discrepancy.</strong> The old harm threshold sits below Franka's own collision threshold, so some of what was called unsafe the robot itself reports as mere contact. This rebuild's oracle is a plain boolean — any arm-arm geom contact — which sidesteps it. It still needs resolving before any number here is quoted alongside the old ones.</p>
+  <p><strong>The framing stays.</strong> The technique is KCCD and it has a fifteen-year production history at DLR and DFKI. <em>The contribution is the measurement.</em></p>
+</section>
+
+<footer>
+  <span>Motion screener · v1 architecture</span>
+  <span>companion to Motion Screener Scope</span>
+</footer>
+
+</div>
+
+</body></html>

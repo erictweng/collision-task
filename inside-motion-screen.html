@@ -1,0 +1,248 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Inside motion-screen</title>
+<style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#eceef1; --panel:#ffffff; --sunk:#e3e6ea;
+  --ink:#12171c; --dim:#5a656f; --line:#d3d9de;
+  --accent:#17607f; --accent-soft:#d9e8ef;
+  --truth:#8f5d15; --truth-soft:#f2e7d3;
+  --ok:#2c7a52; --bad:#ab3327;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#13171b; --panel:#1a1f25; --sunk:#161b20;
+  --ink:#e4e9ee; --dim:#98a3ad; --line:#2c333a;
+  --accent:#68b3d2; --accent-soft:#1c2f39;
+  --truth:#d6a355; --truth-soft:#2a2216;
+  --ok:#66c28e; --bad:#ef8b7e;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ground:#13171b; --panel:#1a1f25; --sunk:#161b20;
+  --ink:#e4e9ee; --dim:#98a3ad; --line:#2c333a;
+  --accent:#68b3d2; --accent-soft:#1c2f39;
+  --truth:#d6a355; --truth-soft:#2a2216;
+  --ok:#66c28e; --bad:#ef8b7e;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding:0 28px 80px}
+h1,h2{font-family:Archivo,ui-sans-serif,system-ui,sans-serif;text-wrap:balance;margin:0}
+h1{font-weight:700;font-size:clamp(28px,4vw,42px);letter-spacing:-.025em;line-height:1.1}
+h2{font-weight:600;font-size:clamp(20px,2.5vw,25px);letter-spacing:-.015em;margin-bottom:10px}
+p{margin:0 0 14px;max-width:68ch}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em;
+  background:var(--sunk);padding:1px 5px;border-radius:2px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+header{padding:52px 0 30px;border-bottom:1px solid var(--line)}
+.lede{font-size:18.5px;line-height:1.5;max-width:62ch;margin-top:14px}
+section{padding:42px 0;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.head{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+figure{margin:24px 0 0;background:var(--panel);border:1px solid var(--line);
+  border-radius:3px;padding:22px 22px 16px;overflow-x:auto}
+figure svg{display:block;max-width:100%;height:auto;color:var(--ink)}
+figcaption{font-size:12.5px;color:var(--dim);margin-top:14px;max-width:76ch;line-height:1.55}
+table{border-collapse:collapse;width:100%;margin-top:18px;font-size:13.5px}
+th,td{padding:8px 14px 8px 0;border-bottom:1px solid var(--line);text-align:left;vertical-align:baseline}
+thead th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);border-bottom-color:var(--ink)}
+td.mod{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--accent);white-space:nowrap}
+tr.truthrow td.mod{color:var(--truth)}
+.tw{overflow-x:auto}
+.note{border-left:2px solid var(--accent);padding:2px 0 2px 16px;margin:20px 0;
+  color:var(--dim);font-size:14px;max-width:66ch}
+.note b{color:var(--ink);font-weight:500}
+.warn{border-left-color:var(--bad)}
+.legend{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--dim)}
+.legend span{display:flex;align-items:center;gap:7px}
+.sw{width:22px;height:10px;border-radius:2px;display:inline-block}
+footer{padding:30px 0 0;color:var(--dim);font-size:13px}
+</style>
+</head><body>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">motion-screen &middot; architecture</div>
+  <h1>Inside motion-screen</h1>
+  <p class="lede">Twelve modules in two halves that are never allowed to meet, plus one file
+  where they do &mdash; on purpose, so the leak has somewhere to be audited.</p>
+</header>
+
+<section>
+  <div class="head"><div class="eyebrow">The organising idea</div>
+  <h2>Two paths that must not touch</h2></div>
+  <p>The whole repo is shaped by one constraint. The screener decides from a <em>camera estimate</em>
+  of the scene; the oracle decides from the <em>true</em> scene. If any information leaks from the second
+  into the first, every number the project produces is worthless and nothing about the code would
+  look wrong.</p>
+  <p>So the two paths are separate all the way down, and they are brought together in exactly one
+  file. That file is where you audit.</p>
+
+  <figure>
+    <svg viewBox="0 0 950 468" role="img" aria-label="Data flow. A layout feeds two separate paths. The truth path builds a MuJoCo model, generates motions, and runs the physics oracle to produce labels. The screening path derives a scene estimate with camera error and runs a pure-numpy screener to produce verdicts. The two meet only in evalrun.py, which compares them.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="currentColor"></path></marker>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="#8f5d15"></path></marker>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="#17607f"></path></marker>
+      </defs>
+
+      <rect x="20" y="196" width="132" height="56" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"></rect>
+      <text x="86" y="219" text-anchor="middle" font-family="Archivo,sans-serif" font-size="13" font-weight="600" fill="currentColor">Layout</text>
+      <text x="86" y="236" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">scene.py</text>
+      <text x="86" y="268" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="currentColor" opacity=".5">objects, bins, two-arm station</text>
+
+      <line x1="152" y1="212" x2="212" y2="120" stroke="#8f5d15" stroke-width="1.5" marker-end="url(#a2)"></line>
+      <line x1="152" y1="236" x2="212" y2="330" stroke="#17607f" stroke-width="1.5" marker-end="url(#a3)"></line>
+
+      <rect x="214" y="34" width="500" height="164" rx="3" fill="#8f5d15" fill-opacity=".055" stroke="#8f5d15" stroke-width="1" stroke-dasharray="5 4"></rect>
+      <text x="228" y="26" font-family="IBM Plex Mono,monospace" font-size="11" font-weight="500" fill="#8f5d15">TRUTH PATH &mdash; mujoco, offline, expensive</text>
+
+      <rect x="230" y="60" width="140" height="52" rx="2" fill="var(--panel)" stroke="#8f5d15" stroke-width="1.3"></rect>
+      <text x="300" y="81" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Build model</text>
+      <text x="300" y="97" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">model.py</text>
+
+      <rect x="392" y="60" width="140" height="52" rx="2" fill="var(--panel)" stroke="#8f5d15" stroke-width="1.3"></rect>
+      <text x="462" y="81" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Generate motions</text>
+      <text x="462" y="97" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">motions.py &middot; heldout.py</text>
+
+      <rect x="554" y="60" width="146" height="52" rx="2" fill="var(--panel)" stroke="#8f5d15" stroke-width="1.3"></rect>
+      <text x="627" y="81" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Run the physics</text>
+      <text x="627" y="97" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">truth.py &middot; dual.py</text>
+
+      <line x1="370" y1="86" x2="388" y2="86" stroke="#8f5d15" stroke-width="1.4" marker-end="url(#a2)"></line>
+      <line x1="532" y1="86" x2="550" y2="86" stroke="#8f5d15" stroke-width="1.4" marker-end="url(#a2)"></line>
+      <text x="462" y="140" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="#8f5d15">harm predicate: knocked &middot; struck &middot; crushed &middot; structural &middot; arm-arm</text>
+      <text x="462" y="160" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="currentColor">83 ms per motion &mdash; 12.1 verdicts/s/core</text>
+      <text x="462" y="182" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="#8f5d15">Outcome: did it actually collide</text>
+
+      <rect x="214" y="252" width="500" height="182" rx="3" fill="#17607f" fill-opacity=".055" stroke="#17607f" stroke-width="1" stroke-dasharray="5 4"></rect>
+      <text x="228" y="450" font-family="IBM Plex Mono,monospace" font-size="11" font-weight="500" fill="#17607f">SCREENING PATH &mdash; numpy only, ~1 ms, no physics</text>
+
+      <rect x="230" y="276" width="140" height="52" rx="2" fill="var(--panel)" stroke="#17607f" stroke-width="1.3"></rect>
+      <text x="300" y="297" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Scene estimate</text>
+      <text x="300" y="313" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">estimate.py</text>
+      <text x="300" y="345" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="#17607f">drift &middot; occlusion &middot; phantoms</text>
+
+      <rect x="392" y="276" width="140" height="52" rx="2" fill="var(--panel)" stroke="#17607f" stroke-width="1.3"></rect>
+      <text x="462" y="297" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Sphere proxy + FK</text>
+      <text x="462" y="313" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">fast.py &middot; geom.py</text>
+
+      <rect x="554" y="276" width="146" height="52" rx="2" fill="var(--panel)" stroke="#17607f" stroke-width="1.3"></rect>
+      <text x="627" y="297" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Verdict</text>
+      <text x="627" y="313" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">dual.py &middot; certify.py</text>
+
+      <line x1="370" y1="302" x2="388" y2="302" stroke="#17607f" stroke-width="1.4" marker-end="url(#a3)"></line>
+      <line x1="532" y1="302" x2="550" y2="302" stroke="#17607f" stroke-width="1.4" marker-end="url(#a3)"></line>
+      <text x="462" y="368" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="#17607f">Regime A: arm vs arm, no camera &nbsp;&middot;&nbsp; Regime B: arm vs objects</text>
+      <text x="462" y="388" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="#17607f">per-body licence: finger &middot; hand &middot; body</text>
+      <text x="462" y="412" text-anchor="middle" font-family="Archivo,sans-serif" font-size="12.5" font-weight="600" fill="#17607f">Verdict: permit or reject</text>
+
+      <line x1="714" y1="120" x2="784" y2="200" stroke="#8f5d15" stroke-width="1.5" marker-end="url(#a2)"></line>
+      <line x1="714" y1="348" x2="784" y2="256" stroke="#17607f" stroke-width="1.5" marker-end="url(#a3)"></line>
+      <rect x="786" y="196" width="146" height="62" rx="2" fill="var(--panel)" stroke="currentColor" stroke-width="2"></rect>
+      <text x="859" y="218" text-anchor="middle" font-family="Archivo,sans-serif" font-size="13" font-weight="600" fill="currentColor">evalrun.py</text>
+      <text x="859" y="234" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="currentColor" opacity=".62">the only file where</text>
+      <text x="859" y="247" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="currentColor" opacity=".62">both are in scope</text>
+      <text x="859" y="284" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">keep rate &middot; false accepts</text>
+      <text x="859" y="299" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10.5" fill="currentColor" opacity=".62">degradation &middot; held-out</text>
+    </svg>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--truth)"></i> truth path &mdash; mujoco, offline</span>
+      <span><i class="sw" style="background:var(--accent)"></i> screening path &mdash; numpy, runtime</span>
+    </div>
+    <figcaption>A <code>Layout</code> is the true scene and feeds both paths. The screener's only input is a
+    <code>SceneEstimate</code>: boxes and identifiers, holding no reference to a Layout, no MuJoCo model and no
+    Outcome. There is no argument through which truth could arrive.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="head"><div class="eyebrow">Modules</div>
+  <h2>What each file owns</h2></div>
+  <div class="tw">
+  <table>
+    <thead><tr><th>module</th><th>owns</th><th>notable</th></tr></thead>
+    <tbody>
+      <tr><td class="mod">scene.py</td><td>Object model and layout generation</td>
+        <td>A bin is five wall boxes with an open top, so &ldquo;reach inside&rdquo; needs no special case in geometry &mdash; only in margin</td></tr>
+      <tr class="truthrow"><td class="mod">model.py</td><td>MJCF assembly</td>
+        <td><code>build_dual</code> attaches two prefixed Pandas via MjSpec; Panda's <code>meshdir</code> is relative, so scenes are written into its own directory</td></tr>
+      <tr class="truthrow"><td class="mod">motions.py</td><td>IK and generator A</td>
+        <td>Solves at the tool centre point with the gripper pointing down &mdash; solving for the hand body put fingertips 10 cm low</td></tr>
+      <tr class="truthrow"><td class="mod">heldout.py</td><td>Generator B</td>
+        <td>Written <em>after</em> the screener was tuned, and never consulted while tuning</td></tr>
+      <tr class="truthrow"><td class="mod">truth.py</td><td>The oracle and the harm predicate</td>
+        <td>Tiered: displacement, strike force, crush force, structural. Only contacts involving the arm or its payload are attributed</td></tr>
+      <tr class="truthrow"><td class="mod">dual.py</td><td>Two-arm station, Regime A</td>
+        <td><code>screen_regime_a</code> takes no SceneEstimate &mdash; the immunity is enforced by the signature</td></tr>
+      <tr><td class="mod">estimate.py</td><td><b>The only thing the screener may read</b></td>
+        <td>Three error modes plus line-of-sight occlusion from a single exocentric camera</td></tr>
+      <tr><td class="mod">geom.py</td><td>Vectorised sphere/box distance</td>
+        <td>Exact box signed distance including the interior. Imports no mujoco, by design</td></tr>
+      <tr><td class="mod">fast.py</td><td>The screener</td>
+        <td>Batched FK, sphere proxy, per-body licences, self-collision with a calibrated allowed-collision floor</td></tr>
+      <tr><td class="mod">certify.py</td><td>Two-sided certificates for Regime A</td>
+        <td>Inner cores prove collision, outer bubbles prove clearance, the rest is UNKNOWN</td></tr>
+      <tr><td class="mod">evalrun.py</td><td>Evaluation &mdash; <b>the audit point</b></td>
+        <td>The single place truth and estimate are both in scope</td></tr>
+      <tr><td class="mod">station/trip.py</td><td>Runtime force trip</td>
+        <td>Deliberately outside <code>screener/</code>: different moment, different sensor</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="head"><div class="eyebrow">Running it</div>
+  <h2>Entry points</h2></div>
+  <div class="tw">
+  <table>
+    <thead><tr><th>command</th><th>does</th><th>writes</th></tr></thead>
+    <tbody>
+      <tr><td class="mod">experiments.py --rebuild</td><td>Simulates truth, sweeps the operating curve, runs the degradation table and the held-out comparison</td><td class="mod">out/results.json</td></tr>
+      <tr><td class="mod">build_chunk.py / merge_chunks.py</td><td>Builds the labelled dataset in pieces &mdash; truth is the expensive half and the shell has a time limit</td><td class="mod">out/ds_*.pkl</td></tr>
+      <tr><td class="mod">measure_certificates.py</td><td>Resolve rate and soundness of the two-sided certificate</td><td class="mod">out/certificates.json</td></tr>
+      <tr><td class="mod">run_margin.py</td><td>Arm-vs-arm margin sweep, no physics &mdash; the simulator's answers are cached</td><td>stdout</td></tr>
+      <tr><td class="mod">export_view.py &rarr; build_view.py</td><td>Self-contained review page: scene, motion, verdict, outcome, disagreements filterable</td><td class="mod">out/view.html</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">Datasets are cached because truth is the expensive half. <code>experiments.py</code> without
+  <code>--rebuild</code> reuses them, so the analysis re-runs in seconds while the simulation runs once.</div>
+</section>
+
+<section>
+  <div class="head"><div class="eyebrow">Known gaps</div>
+  <h2>Two things the architecture doesn't yet do</h2></div>
+  <div class="note warn"><b>The feasibility gate is not in the pipeline.</b> The control that removes 34%
+  of all unsafe candidates &mdash; and the only one that improves safety and yield together &mdash; exists as
+  an analysis that was run, not as a function anything calls. Every other number in the repo describes
+  code that executes.</div>
+  <div class="note warn"><b>The sphere proxy has holes.</b> Every fitted link fails hull-interior coverage,
+  with gaps up to 59.8 mm. Covering a link's vertices does not cover its convex hull when the cover is a
+  <em>union</em> of spheres, and MuJoCo collides meshes as their hull. So this screener's clearance verdicts
+  are excellent heuristics &mdash; 384 out of 384 correct &mdash; rather than proofs. That is precisely what the
+  <code>kccd-screener</code> rebuild fixes.</div>
+</section>
+
+<footer>
+  Twelve modules, ~3,100 lines. The companion repo <code>kccd-screener</code> answers the narrowed brief:
+  arm-vs-arm only, no camera, no simulator at runtime, sound by construction.
+</footer>
+
+</div>
+
+</body></html>
